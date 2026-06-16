@@ -10,6 +10,9 @@ import { AlertsPage } from "../pages/AlertsPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { ForecastsPage } from "../pages/ForecastsPage";
 import { AdminUsersPage } from "../pages/AdminUsersPage";
+import { OperationsPage } from "../pages/OperationsPage";
+import { SimulationsPage } from "../pages/SimulationsPage";
+import { DeveloperPortalPage } from "../pages/DeveloperPortalPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -24,15 +27,25 @@ export const router = createBrowserRouter([
           { path: "/map", element: <MapPage /> },
           { path: "/districts/:id", element: <DistrictDetailPage /> },
           { path: "/sensors", element: <SensorsPage /> },
+          { path: "/operations", element: <OperationsPage /> },
           { path: "/alerts", element: <AlertsPage /> },
           { path: "/reports", element: <ReportsPage /> },
-          { path: "/forecasts", element: <ForecastsPage /> }
+          { path: "/forecasts", element: <ForecastsPage /> },
+          { path: "/simulations", element: <SimulationsPage /> }
         ]
       }
     ]
   },
   {
     element: <ProtectedRoute roles={["admin"]} />,
-    children: [{ path: "/admin/users", element: <AppLayout />, children: [{ index: true, element: <AdminUsersPage /> }] }]
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          { path: "/developers", element: <DeveloperPortalPage /> },
+          { path: "/admin/users", element: <AdminUsersPage /> }
+        ]
+      }
+    ]
   }
 ]);

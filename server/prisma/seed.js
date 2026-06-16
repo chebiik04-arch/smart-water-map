@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+import { generateApiKey, hashApiKey, keyPrefix } from "../src/utils/apiKeys.js";
 
 const prisma = new PrismaClient();
 
@@ -30,9 +31,13 @@ const sensorTypes = ["GROUNDWATER", "SOIL_MOISTURE", "RAINFALL", "WEATHER"];
 async function main() {
   await clearData();
 
+  const tenant = await prisma.tenant.create({
+    data: { name: "Kenya Drought Response Pilot", slug: "kenya-pilot", country: "Kenya" }
+  });
   const adminPassword = await bcrypt.hash("AdminPass123", 12);
   const admin = await prisma.user.create({
     data: {
+      tenantId: tenant.id,
       name: "Platform Admin",
       email: "admin@smartwater.local",
       passwordHash: adminPassword,
@@ -44,6 +49,7 @@ async function main() {
   await prisma.user.createMany({
     data: [
       {
+        tenantId: tenant.id,
         name: "Amina Field Agent",
         email: "amina.field@smartwater.local",
         passwordHash: adminPassword,
@@ -52,6 +58,7 @@ async function main() {
         points: 86
       },
       {
+        tenantId: tenant.id,
         name: "Hassan Community Monitor",
         email: "hassan.community@smartwater.local",
         passwordHash: adminPassword,
@@ -60,6 +67,7 @@ async function main() {
         points: 64
       },
       {
+        tenantId: tenant.id,
         name: "Voice Reports",
         email: "voice-reports@smartwater.local",
         passwordHash: "external-channel-disabled",
@@ -72,8 +80,8 @@ async function main() {
 
   for (const district of districts) {
     await prisma.$executeRaw`
-      INSERT INTO "District" (id, name, geometry, "droughtRiskLevel", "createdAt")
-      VALUES (${district.id}::uuid, ${district.name},
+      INSERT INTO "District" (id, "tenantId", name, geometry, "droughtRiskLevel", "createdAt")
+      VALUES (${district.id}::uuid, ${tenant.id}::uuid, ${district.name},
         ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify({ type: "Polygon", coordinates: [district.polygon] })}), 4326),
         ${district.risk}::"DroughtRiskLevel", NOW())
     `;
@@ -99,9 +107,21 @@ async function main() {
       INSERT INTO "Sensor" (id, type, location, "districtId", status, "lastPing")
       VALUES (${sensor.id}::uuid, ${sensor.type}::"SensorType",
         ST_SetSRID(ST_MakePoint(${sensor.lng}, ${sensor.lat}), 4326),
-        ${sensor.districtId}::uuid, 'ONLINE'::"SensorStatus", NOW())
+        ${sensor.districtId}::uuid, 'ONLINE'::"SensorStatus", ${i < 2 ? daysAgo(1) : new Date()})
     `;
   }
+
+  await prisma.maintenanceTicket.create({
+    data: {
+      sensorId: sensors[0].id,
+      districtId: sensors[0].districtId,
+      title: "Groundwater sensor missed ping SLA",
+      description: "Seeded maintenance ticket for stale sensor health workflow.",
+      priority: "HIGH",
+      staleHours: 24,
+      assignedTo: "Amina Field Agent"
+    }
+  });
 
   for (const sensor of sensors) {
     for (let day = 29; day >= 0; day -= 1) {
@@ -164,11 +184,28 @@ async function main() {
     `;
   }
 
+  const apiKey = generateApiKey();
+  await prisma.apiKey.create({
+    data: {
+      tenantId: tenant.id,
+      name: "Researcher sandbox key",
+      ownerEmail: "researcher@example.org",
+      quotaPerHour: 250,
+      keyHash: hashApiKey(apiKey),
+      keyPrefix: keyPrefix(apiKey)
+    }
+  });
+
   console.info("Seed complete");
   console.info("Admin login: admin@smartwater.local / AdminPass123");
+  console.info(`Research API key: ${apiKey}`);
 }
 
 async function clearData() {
+  await prisma.apiUsage.deleteMany();
+  await prisma.apiKey.deleteMany();
+  await prisma.digitalTwinSimulation.deleteMany();
+  await prisma.maintenanceTicket.deleteMany();
   await prisma.sensorReading.deleteMany();
   await prisma.satelliteIndex.deleteMany();
   await prisma.droughtForecast.deleteMany();
@@ -181,6 +218,7 @@ async function clearData() {
   await prisma.$executeRaw`DELETE FROM "Sensor"`;
   await prisma.$executeRaw`DELETE FROM "District"`;
   await prisma.user.deleteMany();
+  await prisma.tenant.deleteMany();
 }
 
 async function seedDroughtSnapshots() {

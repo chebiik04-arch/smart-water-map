@@ -19,9 +19,10 @@ router.post("/register", async (req, res, next) => {
   try {
     const input = registerSchema.parse(req.body);
     const passwordHash = await bcrypt.hash(input.password, 12);
+    const tenant = await prisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
     const user = await prisma.user.create({
-      data: { name: input.name, email: input.email, passwordHash, role: input.role, district: input.district },
-      select: { id: true, name: true, email: true, role: true, district: true, createdAt: true }
+      data: { tenantId: tenant?.id, name: input.name, email: input.email, passwordHash, role: input.role, district: input.district },
+      select: { id: true, tenantId: true, name: true, email: true, role: true, district: true, createdAt: true }
     });
     res.status(201).json({ user, token: signToken(user) });
   } catch (err) {
@@ -44,8 +45,7 @@ router.post("/login", async (req, res, next) => {
 });
 
 function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, env.jwtSecret, { expiresIn: "12h" });
+  return jwt.sign({ sub: user.id, role: user.role, tenantId: user.tenantId }, env.jwtSecret, { expiresIn: "12h" });
 }
 
 export default router;
-

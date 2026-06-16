@@ -8,6 +8,7 @@ import { emitAlertNew } from "../services/socket.js";
 export function registerJobs() {
   cron.schedule("*/15 * * * *", pollSensorsAndCheckThresholds);
   cron.schedule("0 * * * *", recalculateDistrictRisk);
+  cron.schedule("10 * * * *", checkSensorHealth);
   cron.schedule("0 6 * * *", dispatchDailyAlerts);
 }
 
@@ -57,6 +58,41 @@ export async function dispatchDailyAlerts() {
   });
   for (const alert of alerts) {
     await dispatchAlert(alert, []);
+  }
+}
+
+export async function checkSensorHealth(staleHours = Number(process.env.SENSOR_STALE_HOURS || 6)) {
+  const threshold = new Date(Date.now() - staleHours * 60 * 60 * 1000);
+  const staleSensors = await prisma.sensor.findMany({
+    where: { OR: [{ lastPing: null }, { lastPing: { lt: threshold } }] },
+    include: { district: true }
+  });
+
+  for (const sensor of staleSensors) {
+    const existing = await prisma.maintenanceTicket.findFirst({
+      where: { sensorId: sensor.id, status: { not: "RESOLVED" } }
+    });
+    if (existing) continue;
+
+    const hours = sensor.lastPing ? (Date.now() - sensor.lastPing.getTime()) / 3600000 : staleHours + 1;
+    await prisma.maintenanceTicket.create({
+      data: {
+        sensorId: sensor.id,
+        districtId: sensor.districtId,
+        title: `${sensor.type} sensor has missed ping SLA`,
+        description: `Sensor ${sensor.id} has not pinged for ${hours.toFixed(1)} hours.`,
+        priority: hours >= 24 ? "CRITICAL" : "HIGH",
+        staleHours: Number(hours.toFixed(1))
+      }
+    });
+    const alert = await prisma.droughtAlert.create({
+      data: {
+        districtId: sensor.districtId,
+        severity: "WATCH",
+        message: `Sensor health alert: ${sensor.type} sensor in ${sensor.district.name} has not pinged for ${hours.toFixed(1)} hours.`
+      }
+    });
+    emitAlertNew(alert);
   }
 }
 

@@ -73,8 +73,41 @@ enum ReportSource {
   WHATSAPP
 }
 
+enum MaintenanceTicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
+model Tenant {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String    @unique
+  country     String
+  createdAt   DateTime  @default(now())
+  users       User[]
+  districts   District[]
+  apiKeys     ApiKey[]
+  simulations DigitalTwinSimulation[]
+}
+
 model User {
   id               String            @id @default(uuid()) @db.Uuid
+  tenantId         String?           @db.Uuid
+  tenant           Tenant?           @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   name             String
   email            String            @unique
   passwordHash     String
@@ -84,12 +117,15 @@ model User {
   createdAt        DateTime          @default(now())
   communityReports CommunityReport[]
 
+  @@index([tenantId])
   @@index([role])
   @@index([district])
 }
 
 model District {
   id                String             @id @default(uuid()) @db.Uuid
+  tenantId          String?            @db.Uuid
+  tenant            Tenant?            @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   name              String             @unique
   geometry          Unsupported("geometry(Polygon, 4326)")
   droughtRiskLevel  DroughtRiskLevel   @default(NORMAL)
@@ -103,6 +139,7 @@ model District {
   boreholes         Borehole[]
   hydroEvents       HydroEvent[]
 
+  @@index([tenantId])
   @@index([droughtRiskLevel])
 }
 
@@ -169,10 +206,74 @@ model Sensor {
   status         SensorStatus    @default(ONLINE)
   lastPing       DateTime?
   readings       SensorReading[]
+  maintenanceTickets MaintenanceTicket[]
 
   @@index([type])
   @@index([districtId])
   @@index([status])
+}
+
+model MaintenanceTicket {
+  id          String                  @id @default(uuid()) @db.Uuid
+  sensorId    String                  @db.Uuid
+  sensor      Sensor                  @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  districtId  String                  @db.Uuid
+  title       String
+  description String
+  priority    MaintenancePriority     @default(MEDIUM)
+  status      MaintenanceTicketStatus @default(OPEN)
+  staleHours  Float
+  assignedTo  String?
+  createdAt   DateTime                @default(now())
+  resolvedAt  DateTime?
+
+  @@index([sensorId, status])
+  @@index([districtId, status])
+}
+
+model DigitalTwinSimulation {
+  id                    String           @id @default(uuid()) @db.Uuid
+  tenantId              String?          @db.Uuid
+  tenant                Tenant?          @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  districtId            String           @db.Uuid
+  scenarioName          String
+  rainfallDropPercent   Float
+  durationWeeks         Int
+  baselineGroundwater   Float
+  projectedGroundwater  Float
+  projectedSeverityScore Float
+  projectedRiskLevel    DroughtRiskLevel
+  assumptions           Json
+  createdAt             DateTime         @default(now())
+
+  @@index([tenantId, districtId, createdAt])
+}
+
+model ApiKey {
+  id              String       @id @default(uuid()) @db.Uuid
+  tenantId        String?      @db.Uuid
+  tenant          Tenant?      @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  name            String
+  keyHash         String       @unique
+  keyPrefix       String
+  ownerEmail      String
+  quotaPerHour    Int          @default(100)
+  status          ApiKeyStatus @default(ACTIVE)
+  createdAt       DateTime     @default(now())
+  lastUsedAt      DateTime?
+  usages          ApiUsage[]
+
+  @@index([tenantId, status])
+}
+
+model ApiUsage {
+  id        String   @id @default(uuid()) @db.Uuid
+  apiKeyId  String   @db.Uuid
+  apiKey    ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  route     String
+  usedAt    DateTime @default(now())
+
+  @@index([apiKeyId, usedAt])
 }
 
 model SensorReading {

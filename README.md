@@ -92,6 +92,7 @@ smart-water-map/
 - Frontend: React, Vite, Tailwind CSS, React Router v6, Zustand, Leaflet/react-leaflet, Recharts.
 - Advanced GIS: drought timelapse, borehole infrastructure, conflict-risk overlays, flood/drought event layers, and Three.js groundwater terrain.
 - Field collection: offline-first PWA reporting, compressed photo evidence with GPS tagging, multilingual UI, IVR/WhatsApp intake stubs, and contributor points.
+- Platform operations: stale-sensor health monitoring, maintenance tickets, digital twin rainfall stress simulations, researcher API keys with quotas, and tenant-scoped data.
 - API versioning: all application routes live under `/api/v1`.
 
 ## Setup
@@ -194,6 +195,9 @@ API: `http://localhost:4000`
 - `GET /api/v1/districts`
 - `GET /api/v1/districts/:id/status`
 - `GET /api/v1/sensors`
+- `GET /api/v1/sensors/operations/health`
+- `GET /api/v1/sensors/operations/tickets`
+- `POST /api/v1/sensors/operations/tickets/:id/status`
 - `POST /api/v1/sensors/:id/reading`
 - `GET /api/v1/sensors/:id/readings`
 - `GET /api/v1/satellite/:districtId`
@@ -211,6 +215,15 @@ API: `http://localhost:4000`
 - `GET /api/v1/map-layers/boreholes`
 - `GET /api/v1/map-layers/conflict-risks`
 - `GET /api/v1/map-layers/hydro-events`
+- `POST /api/v1/simulations/groundwater`
+- `GET /api/v1/simulations`
+- `GET /api/v1/developer/portal`
+- `POST /api/v1/developer/api-keys`
+- `GET /api/v1/developer/api-keys`
+- `GET /api/v1/developer/usage`
+- `GET /api/v1/public/districts`
+- `GET /api/v1/public/sensors`
+- `GET /api/v1/public/readings?sensorId=<uuid>`
 
 ## GIS Intelligence Layers
 
@@ -227,6 +240,14 @@ API: `http://localhost:4000`
 - Multilingual support: English, Kiswahili, Afaan Oromo, and Somali language selector.
 - Voice reporting: IVR and WhatsApp webhook endpoints accept phone-based water level reports for non-smartphone users.
 - Gamification: verified reports award contributor points and power the community leaderboard.
+
+## Operations And Platform
+
+- Sensor health monitoring: scheduled stale-ping checks create maintenance tickets and admin-visible alerts.
+- Maintenance workflow: operations page lists stale sensors, open tickets, assignments, priorities, and resolution actions.
+- Digital twin: planners can simulate groundwater impact from rainfall drops, such as a 30% drop over 6 weeks.
+- Developer API: admin-issued API keys give researchers quota-limited access to public district, sensor, and reading data.
+- Multi-tenancy: tenants isolate users, districts, API keys, public API scope, simulations, and operational views for country/NGO deployments.
 
 ## Socket.io Events
 
