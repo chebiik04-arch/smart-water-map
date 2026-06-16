@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: smart-water-map-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smart_water_map
+      POSTGRES_USER: smart_water
+      POSTGRES_PASSWORD: smart_water_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smart_water -d smart_water_map"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
