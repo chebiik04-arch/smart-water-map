@@ -1,0 +1,166 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum UserRole {
+  admin
+  field_agent
+  community_user
+}
+
+enum SensorType {
+  GROUNDWATER
+  SOIL_MOISTURE
+  RAINFALL
+  WEATHER
+}
+
+enum SensorStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+}
+
+enum DroughtRiskLevel {
+  NORMAL
+  WATCH
+  WARNING
+  EMERGENCY
+}
+
+enum SatelliteIndexType {
+  NDVI
+  LST
+  SMAP
+  ET
+}
+
+enum AlertSeverity {
+  WATCH
+  WARNING
+  EMERGENCY
+}
+
+enum ReportStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  RESOLVED
+}
+
+model User {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String
+  email            String            @unique
+  passwordHash     String
+  role             UserRole          @default(community_user)
+  district         String?
+  createdAt        DateTime          @default(now())
+  communityReports CommunityReport[]
+
+  @@index([role])
+  @@index([district])
+}
+
+model District {
+  id                String             @id @default(uuid()) @db.Uuid
+  name              String             @unique
+  geometry          Unsupported("geometry(Polygon, 4326)")
+  droughtRiskLevel  DroughtRiskLevel   @default(NORMAL)
+  createdAt         DateTime           @default(now())
+  sensors           Sensor[]
+  satelliteIndexes  SatelliteIndex[]
+  droughtAlerts     DroughtAlert[]
+  communityReports  CommunityReport[]
+  droughtForecasts  DroughtForecast[]
+
+  @@index([droughtRiskLevel])
+}
+
+model Sensor {
+  id             String          @id @default(uuid()) @db.Uuid
+  type           SensorType
+  location       Unsupported("geometry(Point, 4326)")
+  districtId     String          @db.Uuid
+  district       District        @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  status         SensorStatus    @default(ONLINE)
+  lastPing       DateTime?
+  readings       SensorReading[]
+
+  @@index([type])
+  @@index([districtId])
+  @@index([status])
+}
+
+model SensorReading {
+  id        String   @id @default(uuid()) @db.Uuid
+  sensorId  String   @db.Uuid
+  sensor    Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  value     Float
+  unit      String
+  timestamp DateTime @default(now())
+  metadata  Json?
+
+  @@index([sensorId, timestamp])
+}
+
+model SatelliteIndex {
+  id         String             @id @default(uuid()) @db.Uuid
+  districtId String             @db.Uuid
+  district   District           @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  indexType  SatelliteIndexType
+  value      Float
+  capturedAt DateTime
+  geoTiff    String?
+
+  @@index([districtId, indexType, capturedAt])
+}
+
+model DroughtAlert {
+  id          String        @id @default(uuid()) @db.Uuid
+  districtId  String        @db.Uuid
+  district    District      @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  severity    AlertSeverity
+  message     String
+  triggeredAt DateTime      @default(now())
+  resolvedAt  DateTime?
+
+  @@index([districtId, resolvedAt])
+  @@index([severity])
+}
+
+model CommunityReport {
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @db.Uuid
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  districtId  String?      @db.Uuid
+  district    District?    @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  location    Unsupported("geometry(Point, 4326)")
+  waterLevel  Float
+  description String
+  photoUrl    String?
+  status      ReportStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+
+  @@index([userId])
+  @@index([districtId, status])
+}
+
+model DroughtForecast {
+  id                String           @id @default(uuid()) @db.Uuid
+  districtId        String           @db.Uuid
+  district          District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  forecastDate      DateTime
+  predictedSeverity DroughtRiskLevel
+  confidenceScore   Float
+  modelVersion      String
+
+  @@index([districtId, forecastDate])
+}
