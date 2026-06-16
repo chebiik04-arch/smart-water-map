@@ -50,6 +50,11 @@ async function main() {
     `;
   }
 
+  await seedDroughtSnapshots();
+  await seedBoreholes();
+  await seedConflictRiskAreas();
+  await seedHydroEvents();
+
   const sensors = [];
   for (let i = 0; i < 10; i += 1) {
     const district = districts[i % districts.length];
@@ -137,10 +142,108 @@ async function clearData() {
   await prisma.satelliteIndex.deleteMany();
   await prisma.droughtForecast.deleteMany();
   await prisma.droughtAlert.deleteMany();
+  await prisma.droughtSnapshot.deleteMany();
+  await prisma.$executeRaw`DELETE FROM "HydroEvent"`;
+  await prisma.$executeRaw`DELETE FROM "ConflictRiskArea"`;
+  await prisma.$executeRaw`DELETE FROM "Borehole"`;
   await prisma.$executeRaw`DELETE FROM "CommunityReport"`;
   await prisma.$executeRaw`DELETE FROM "Sensor"`;
   await prisma.$executeRaw`DELETE FROM "District"`;
   await prisma.user.deleteMany();
+}
+
+async function seedDroughtSnapshots() {
+  const snapshots = [];
+  for (const [districtIndex, district] of districts.entries()) {
+    for (let week = 15; week >= 0; week -= 1) {
+      const spreadPressure = (15 - week) * (4.2 + districtIndex * 0.8);
+      const base = [34, 22, 14][districtIndex];
+      const score = Math.min(96, base + spreadPressure);
+      snapshots.push({
+        districtId: district.id,
+        weekStart: weeksAgo(week),
+        severityScore: Number(score.toFixed(1)),
+        riskLevel: riskLevelForScore(score),
+        groundwaterDepthMeters: Number((28 + score * 0.42 + districtIndex * 4).toFixed(1)),
+        rainfallAnomalyPercent: Number((-12 - score * 0.7).toFixed(1)),
+        ndvi: Number(Math.max(0.12, 0.62 - score / 190).toFixed(2))
+      });
+    }
+  }
+  await prisma.droughtSnapshot.createMany({ data: snapshots });
+}
+
+async function seedBoreholes() {
+  const statuses = ["FUNCTIONAL", "DRY", "ABANDONED", "FUNCTIONAL", "FUNCTIONAL", "DRY"];
+  let counter = 1;
+  for (const district of districts) {
+    for (let i = 0; i < 6; i += 1) {
+      const lng = district.polygon[0][0] + 0.04 + (i % 3) * 0.09;
+      const lat = district.polygon[0][1] + 0.06 + Math.floor(i / 3) * 0.1;
+      await prisma.$executeRaw`
+        INSERT INTO "Borehole" (id, name, location, "districtId", "depthMeters", "yieldLitersPerHour", status, "lastInspectedAt")
+        VALUES (gen_random_uuid(), ${`BH-${String(counter).padStart(3, "0")}`},
+          ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326),
+          ${district.id}::uuid, ${55 + i * 18 + counter}, ${420 + i * 120},
+          ${statuses[(counter + i) % statuses.length]}::"BoreholeStatus", NOW() - interval '6 days')
+      `;
+      counter += 1;
+    }
+  }
+}
+
+async function seedConflictRiskAreas() {
+  const areas = [
+    {
+      name: "Turkana grazing corridor",
+      riskScore: 82,
+      incidentsLastYear: 11,
+      notes: "Dry-season livestock movement overlaps with declining borehole yield.",
+      polygon: [[35.22, 0.47], [35.5, 0.44], [35.48, 0.62], [35.2, 0.6], [35.22, 0.47]]
+    },
+    {
+      name: "Marsabit border wells",
+      riskScore: 68,
+      incidentsLastYear: 6,
+      notes: "Shared shallow wells show repeated queuing disputes during drought watch periods.",
+      polygon: [[35.66, 0.32], [35.93, 0.32], [35.86, 0.52], [35.6, 0.48], [35.66, 0.32]]
+    },
+    {
+      name: "Isiolo seasonal river access",
+      riskScore: 49,
+      incidentsLastYear: 3,
+      notes: "Conflict risk rises after flash flood damage closes alternate water points.",
+      polygon: [[35.18, 0.02], [35.42, 0.03], [35.39, 0.19], [35.16, 0.18], [35.18, 0.02]]
+    }
+  ];
+
+  for (const area of areas) {
+    await prisma.$executeRaw`
+      INSERT INTO "ConflictRiskArea" (id, name, geometry, "riskScore", "incidentsLastYear", notes, "updatedAt")
+      VALUES (gen_random_uuid(), ${area.name},
+        ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify({ type: "Polygon", coordinates: [area.polygon] })}), 4326),
+        ${area.riskScore}, ${area.incidentsLastYear}, ${area.notes}, NOW())
+    `;
+  }
+}
+
+async function seedHydroEvents() {
+  const events = [
+    { district: districts[0], eventType: "DROUGHT", severity: "EMERGENCY", weeks: 1, inset: 0.03, notes: "Emergency drought footprint around primary grazing belt." },
+    { district: districts[1], eventType: "DROUGHT", severity: "WARNING", weeks: 3, inset: 0.04, notes: "Drought expansion detected across eastern ward." },
+    { district: districts[2], eventType: "FLASH_FLOOD", severity: "WATCH", weeks: 10, inset: 0.06, notes: "Wet-season flash flood exposure along seasonal drainage." },
+    { district: districts[0], eventType: "FLASH_FLOOD", severity: "WARNING", weeks: 13, inset: 0.08, notes: "Flood-drought duality zone: flood-prone channels within drought-stressed district." }
+  ];
+
+  for (const event of events) {
+    await prisma.$executeRaw`
+      INSERT INTO "HydroEvent" (id, "districtId", "eventType", severity, "eventDate", geometry, notes)
+      VALUES (gen_random_uuid(), ${event.district.id}::uuid, ${event.eventType}::"HydroEventType",
+        ${event.severity}::"DroughtRiskLevel", ${weeksAgo(event.weeks)},
+        ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify({ type: "Polygon", coordinates: [insetPolygon(event.district.polygon, event.inset)] })}), 4326),
+        ${event.notes})
+    `;
+  }
 }
 
 function valueFor(type, day) {
@@ -165,6 +268,29 @@ function daysFromNow(day) {
   return new Date(Date.now() + day * 24 * 60 * 60 * 1000);
 }
 
+function weeksAgo(week) {
+  return new Date(Date.now() - week * 7 * 24 * 60 * 60 * 1000);
+}
+
+function riskLevelForScore(score) {
+  if (score <= 30) return "NORMAL";
+  if (score <= 50) return "WATCH";
+  if (score <= 75) return "WARNING";
+  return "EMERGENCY";
+}
+
+function insetPolygon(polygon, inset) {
+  return polygon.map(([lng, lat], index) => {
+    if (index === polygon.length - 1) {
+      const [firstLng, firstLat] = polygon[0];
+      return [firstLng + inset, firstLat + inset];
+    }
+    const directionLng = index === 0 || index === 3 ? inset : -inset;
+    const directionLat = index < 2 ? inset : -inset;
+    return [lng + directionLng, lat + directionLat];
+  });
+}
+
 main()
   .catch((error) => {
     console.error(error);
@@ -173,4 +299,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

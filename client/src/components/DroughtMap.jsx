@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { CircleMarker, GeoJSON, LayersControl, MapContainer, Marker, Popup, TileLayer, Tooltip } from "react-leaflet";
 import L from "leaflet";
-import { Layers, RadioTower } from "lucide-react";
+import { Activity, Droplets, Layers, RadioTower, ShieldAlert, Waves } from "lucide-react";
 import { endpoints } from "../services/api";
 import { createSocket } from "../services/socket";
-import { districtStyle, droughtColor, geoJsonPointToLatLng } from "../utils/geoHelpers";
+import { districtStyle, droughtColor, geoJsonPointToLatLng, scoreColor } from "../utils/geoHelpers";
 import { SeverityBadge } from "./SeverityBadge";
+import { WaterTableTerrain } from "./WaterTableTerrain";
 
 const { Overlay } = LayersControl;
 
@@ -23,24 +24,59 @@ const reportIcon = new L.DivIcon({
   iconAnchor: [12, 12]
 });
 
+const boreholeIcons = {
+  FUNCTIONAL: new L.DivIcon({
+    className: "",
+    html: '<div class="grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-[#27AE60] text-xs font-bold text-white shadow-md">B</div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  }),
+  DRY: new L.DivIcon({
+    className: "",
+    html: '<div class="grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-[#C0392B] text-xs font-bold text-white shadow-md">B</div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  }),
+  ABANDONED: new L.DivIcon({
+    className: "",
+    html: '<div class="grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-[#6B7280] text-xs font-bold text-white shadow-md">B</div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  })
+};
+
 export function DroughtMap() {
   const [districts, setDistricts] = useState(null);
   const [sensors, setSensors] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [reports, setReports] = useState([]);
+  const [timeline, setTimeline] = useState([]);
+  const [boreholes, setBoreholes] = useState([]);
+  const [conflictRisks, setConflictRisks] = useState(null);
+  const [hydroEvents, setHydroEvents] = useState(null);
   const [liveUpdates, setLiveUpdates] = useState([]);
+  const [weekIndex, setWeekIndex] = useState(0);
 
   useEffect(() => {
     Promise.all([
       endpoints.districts(),
       endpoints.sensors(),
       endpoints.alerts(),
-      endpoints.communityReports()
-    ]).then(([districtRes, sensorRes, alertRes, reportRes]) => {
+      endpoints.communityReports(),
+      endpoints.droughtTimeline(),
+      endpoints.boreholes(),
+      endpoints.conflictRisks(),
+      endpoints.hydroEvents()
+    ]).then(([districtRes, sensorRes, alertRes, reportRes, timelineRes, boreholeRes, conflictRes, hydroRes]) => {
       setDistricts(districtRes.data);
       setSensors(sensorRes.data);
       setAlerts(alertRes.data);
       setReports(reportRes.data);
+      setTimeline(timelineRes.data);
+      setBoreholes(boreholeRes.data);
+      setConflictRisks(conflictRes.data);
+      setHydroEvents(hydroRes.data);
+      setWeekIndex(Math.max(0, uniqueWeeks(timelineRes.data).length - 1));
     }).catch(() => {});
   }, []);
 
@@ -61,6 +97,20 @@ export function DroughtMap() {
     }, {});
   }, [alerts]);
 
+  const weeks = useMemo(() => uniqueWeeks(timeline), [timeline]);
+  const activeWeek = weeks[weekIndex];
+  const snapshotsByDistrict = useMemo(() => {
+    return timeline
+      .filter((snapshot) => snapshot.weekStart === activeWeek)
+      .reduce((acc, snapshot) => {
+        acc[snapshot.districtId] = snapshot;
+        return acc;
+      }, {});
+  }, [activeWeek, timeline]);
+  const terrainSnapshot = useMemo(() => {
+    return Object.values(snapshotsByDistrict).sort((a, b) => b.severityScore - a.severityScore)[0];
+  }, [snapshotsByDistrict]);
+
   return (
     <div className="relative h-full">
       <MapContainer center={[0.52, 35.27]} zoom={9} minZoom={6} className="z-0">
@@ -72,14 +122,22 @@ export function DroughtMap() {
 
           {districts && (
             <GeoJSON
-              key={JSON.stringify(districts.features?.map((f) => f.properties?.droughtRiskLevel))}
+              key={`${activeWeek}-${JSON.stringify(districts.features?.map((f) => f.properties?.droughtRiskLevel))}`}
               data={districts}
-              style={districtStyle}
+              style={(feature) => {
+                const snapshot = snapshotsByDistrict[feature.id];
+                if (!snapshot) return districtStyle(feature);
+                const color = scoreColor(snapshot.severityScore);
+                return { color, weight: 2, fillColor: color, fillOpacity: 0.42 };
+              }}
               onEachFeature={(feature, layer) => {
                 const alertsForDistrict = alertsByDistrict[feature.id] || [];
+                const snapshot = snapshotsByDistrict[feature.id];
                 layer.bindPopup(`
                   <strong>${feature.properties.name}</strong><br/>
-                  Risk: ${feature.properties.droughtRiskLevel}<br/>
+                  Risk: ${snapshot?.riskLevel || feature.properties.droughtRiskLevel}<br/>
+                  Score: ${snapshot?.severityScore ?? "n/a"}<br/>
+                  Water table: ${snapshot?.groundwaterDepthMeters ?? "n/a"} m<br/>
                   Active alerts: ${alertsForDistrict.length}
                 `);
               }}
@@ -121,6 +179,54 @@ export function DroughtMap() {
               })}
             </>
           </Overlay>
+          <Overlay checked name="Borehole network">
+            <>
+              {boreholes.map((borehole) => <BoreholeMarker key={borehole.id} borehole={borehole} />)}
+            </>
+          </Overlay>
+          <Overlay name="Conflict risk">
+            {conflictRisks && (
+              <GeoJSON
+                data={conflictRisks}
+                style={(feature) => ({
+                  color: "#7F1D1D",
+                  weight: 2,
+                  fillColor: "#C0392B",
+                  fillOpacity: Math.min(0.5, feature.properties.riskScore / 180)
+                })}
+                onEachFeature={(feature, layer) => {
+                  layer.bindPopup(`
+                    <strong>${feature.properties.name}</strong><br/>
+                    Risk score: ${feature.properties.riskScore}<br/>
+                    Incidents last year: ${feature.properties.incidentsLastYear}<br/>
+                    ${feature.properties.notes}
+                  `);
+                }}
+              />
+            )}
+          </Overlay>
+          <Overlay name="Flood-drought duality">
+            {hydroEvents && (
+              <GeoJSON
+                data={hydroEvents}
+                style={(feature) => ({
+                  color: feature.properties.eventType === "FLASH_FLOOD" ? "#2563EB" : "#C0392B",
+                  dashArray: feature.properties.eventType === "FLASH_FLOOD" ? "4 6" : "0",
+                  weight: 2,
+                  fillColor: feature.properties.eventType === "FLASH_FLOOD" ? "#60A5FA" : "#E07B00",
+                  fillOpacity: 0.28
+                })}
+                onEachFeature={(feature, layer) => {
+                  layer.bindPopup(`
+                    <strong>${feature.properties.eventType.replace("_", " ")}</strong><br/>
+                    District: ${feature.properties.districtName}<br/>
+                    Severity: ${feature.properties.severity}<br/>
+                    ${feature.properties.notes}
+                  `);
+                }}
+              />
+            )}
+          </Overlay>
 
           {districts?.features?.map((feature) => {
             const alertsForDistrict = alertsByDistrict[feature.id] || [];
@@ -147,6 +253,26 @@ export function DroughtMap() {
         </div>
       </div>
 
+      <div className="absolute left-4 bottom-4 z-[500] w-[26rem] max-w-[calc(100vw-2rem)] rounded-lg border border-black/10 bg-white/95 p-4 shadow-panel backdrop-blur">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-primary"><Activity size={18} /><p className="font-semibold">Drought progression</p></div>
+          <p className="text-xs text-black/60">{activeWeek ? new Date(activeWeek).toLocaleDateString() : "Loading"}</p>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max={Math.max(0, weeks.length - 1)}
+          value={weekIndex}
+          onChange={(event) => setWeekIndex(Number(event.target.value))}
+          className="w-full accent-primary"
+        />
+        <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+          <OverlayMetric icon={Droplets} label="Boreholes" value={boreholes.length} />
+          <OverlayMetric icon={ShieldAlert} label="Conflict zones" value={conflictRisks?.features?.length || 0} />
+          <OverlayMetric icon={Waves} label="Flood/drought" value={hydroEvents?.features?.length || 0} />
+        </div>
+      </div>
+
       <div className="absolute bottom-4 right-4 z-[500] w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-black/10 bg-white/95 p-4 shadow-panel backdrop-blur">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-primary"><RadioTower size={18} /><p className="font-semibold">Live sensor stream</p></div>
@@ -160,6 +286,10 @@ export function DroughtMap() {
             </div>
           )) : <p className="text-sm text-black/60">Waiting for sensor:update events</p>}
         </div>
+      </div>
+
+      <div className="absolute right-4 top-20 z-[500] w-80 max-w-[calc(100vw-2rem)]">
+        <WaterTableTerrain snapshot={terrainSnapshot} />
       </div>
     </div>
   );
@@ -175,6 +305,22 @@ function SensorMarker({ sensor }) {
         <p>Status: {sensor.status}</p>
         <p>District: {sensor.districtName}</p>
         <p>Last ping: {sensor.lastPing ? new Date(sensor.lastPing).toLocaleString() : "No ping yet"}</p>
+      </Popup>
+    </Marker>
+  );
+}
+
+function BoreholeMarker({ borehole }) {
+  const pos = geoJsonPointToLatLng(borehole.location);
+  if (!pos) return null;
+  return (
+    <Marker position={pos} icon={boreholeIcons[borehole.status] || boreholeIcons.ABANDONED}>
+      <Popup>
+        <strong>{borehole.name}</strong>
+        <p>Status: {borehole.status}</p>
+        <p>District: {borehole.districtName}</p>
+        <p>Depth: {borehole.depthMeters} m</p>
+        <p>Yield: {borehole.yieldLitersPerHour} L/hr</p>
       </Popup>
     </Marker>
   );
@@ -197,6 +343,20 @@ function NdviOverlay({ districts }) {
 
 function Legend({ label, color }) {
   return <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm" style={{ background: color }} /> {label}</div>;
+}
+
+function OverlayMetric({ icon: Icon, label, value }) {
+  return (
+    <div className="rounded-md border border-black/10 bg-background p-2">
+      <Icon size={15} className="mb-1 text-primary" />
+      <p className="font-semibold">{value}</p>
+      <p className="text-black/55">{label}</p>
+    </div>
+  );
+}
+
+function uniqueWeeks(timeline) {
+  return [...new Set(timeline.map((snapshot) => snapshot.weekStart))].sort();
 }
 
 function approximatePolygonCenter(geometry) {

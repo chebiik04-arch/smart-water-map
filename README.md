@@ -13,6 +13,7 @@ smart-water-map/
       components/
         AlertBanner.jsx
         DroughtMap.jsx
+        WaterTableTerrain.jsx
         SensorCard.jsx
         SeverityBadge.jsx
         TimeSeriesChart.jsx
@@ -85,6 +86,7 @@ smart-water-map/
 
 - Backend: Node.js, Express, Prisma, PostgreSQL/PostGIS, Socket.io, JWT, node-cron.
 - Frontend: React, Vite, Tailwind CSS, React Router v6, Zustand, Leaflet/react-leaflet, Recharts.
+- Advanced GIS: drought timelapse, borehole infrastructure, conflict-risk overlays, flood/drought event layers, and Three.js groundwater terrain.
 - API versioning: all application routes live under `/api/v1`.
 
 ## Setup
@@ -196,6 +198,18 @@ API: `http://localhost:4000`
 - `POST /api/v1/community/report`
 - `GET /api/v1/forecasts/:districtId`
 - `GET /api/v1/dashboard/summary`
+- `GET /api/v1/map-layers/drought-timeline`
+- `GET /api/v1/map-layers/boreholes`
+- `GET /api/v1/map-layers/conflict-risks`
+- `GET /api/v1/map-layers/hydro-events`
+
+## GIS Intelligence Layers
+
+- Animated drought progression: slider-driven weekly drought spread across districts.
+- 3D terrain with water table: Three.js terrain card showing groundwater depth as a subsurface layer.
+- Borehole network map: borehole depth, yield, district, and status markers.
+- Conflict risk overlay: historical water-scarcity conflict risk polygons.
+- Flood-drought duality map: flash flood and drought event footprints on the same operational map.
 
 ## Socket.io Events
 

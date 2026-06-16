@@ -55,6 +55,17 @@ enum ReportStatus {
   RESOLVED
 }
 
+enum BoreholeStatus {
+  FUNCTIONAL
+  DRY
+  ABANDONED
+}
+
+enum HydroEventType {
+  FLASH_FLOOD
+  DROUGHT
+}
+
 model User {
   id               String            @id @default(uuid()) @db.Uuid
   name             String
@@ -80,8 +91,65 @@ model District {
   droughtAlerts     DroughtAlert[]
   communityReports  CommunityReport[]
   droughtForecasts  DroughtForecast[]
+  droughtSnapshots  DroughtSnapshot[]
+  boreholes         Borehole[]
+  hydroEvents       HydroEvent[]
 
   @@index([droughtRiskLevel])
+}
+
+model DroughtSnapshot {
+  id                     String           @id @default(uuid()) @db.Uuid
+  districtId             String           @db.Uuid
+  district               District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  weekStart              DateTime
+  severityScore          Float
+  riskLevel              DroughtRiskLevel
+  groundwaterDepthMeters Float
+  rainfallAnomalyPercent Float
+  ndvi                   Float
+
+  @@index([districtId, weekStart])
+  @@index([riskLevel])
+}
+
+model Borehole {
+  id                  String         @id @default(uuid()) @db.Uuid
+  name                String
+  location            Unsupported("geometry(Point, 4326)")
+  districtId          String         @db.Uuid
+  district            District       @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  depthMeters         Float
+  yieldLitersPerHour  Float
+  status              BoreholeStatus
+  lastInspectedAt     DateTime?
+
+  @@index([districtId, status])
+}
+
+model ConflictRiskArea {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String
+  geometry          Unsupported("geometry(Polygon, 4326)")
+  riskScore         Float
+  incidentsLastYear Int
+  notes             String
+  updatedAt         DateTime @default(now())
+
+  @@index([riskScore])
+}
+
+model HydroEvent {
+  id         String         @id @default(uuid()) @db.Uuid
+  districtId String         @db.Uuid
+  district   District       @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  eventType  HydroEventType
+  severity   DroughtRiskLevel
+  eventDate  DateTime
+  geometry   Unsupported("geometry(Polygon, 4326)")
+  notes      String
+
+  @@index([districtId, eventType, eventDate])
 }
 
 model Sensor {

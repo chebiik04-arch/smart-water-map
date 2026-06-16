@@ -13,6 +13,13 @@ export function droughtColor(level) {
   }[level] || "#27AE60";
 }
 
+export function scoreColor(score) {
+  if (score <= 30) return "#27AE60";
+  if (score <= 50) return "#E07B00";
+  if (score <= 75) return "#F97316";
+  return "#C0392B";
+}
+
 export function districtStyle(feature) {
   const color = droughtColor(feature?.properties?.droughtRiskLevel);
   return {
@@ -22,4 +29,3 @@ export function districtStyle(feature) {
     fillOpacity: 0.38
   };
 }
-

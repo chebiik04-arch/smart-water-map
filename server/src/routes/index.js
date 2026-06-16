@@ -7,6 +7,7 @@ import alertRoutes from "./alerts.js";
 import communityRoutes from "./community.js";
 import forecastRoutes from "./forecasts.js";
 import dashboardRoutes from "./dashboard.js";
+import mapLayerRoutes from "./mapLayers.js";
 
 const router = Router();
 
@@ -18,6 +19,6 @@ router.use("/alerts", alertRoutes);
 router.use("/community", communityRoutes);
 router.use("/forecasts", forecastRoutes);
 router.use("/dashboard", dashboardRoutes);
+router.use("/map-layers", mapLayerRoutes);
 
 export default router;
-

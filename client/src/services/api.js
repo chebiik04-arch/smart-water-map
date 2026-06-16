@@ -34,5 +34,9 @@ export const endpoints = {
   resolveAlert: (id) => api.post(`/alerts/${id}/resolve`),
   communityReports: () => api.get("/community/reports"),
   communityReport: (payload) => api.post("/community/report", payload),
-  forecasts: (districtId) => api.get(`/forecasts/${districtId}`)
+  forecasts: (districtId) => api.get(`/forecasts/${districtId}`),
+  droughtTimeline: () => api.get("/map-layers/drought-timeline"),
+  boreholes: () => api.get("/map-layers/boreholes"),
+  conflictRisks: () => api.get("/map-layers/conflict-risks"),
+  hydroEvents: () => api.get("/map-layers/hydro-events")
 };
