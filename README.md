@@ -7,6 +7,8 @@ Production-ready monorepo scaffold for a drought monitoring platform with PostGI
 ```text
 smart-water-map/
   client/
+    Dockerfile
+    nginx.conf
     src/
       components/
         AlertBanner.jsx
@@ -42,6 +44,7 @@ smart-water-map/
     tailwind.config.js
     vite.config.js
   server/
+    Dockerfile
     prisma/
       schema.prisma
       seed.js
@@ -86,11 +89,63 @@ smart-water-map/
 
 ## Setup
 
-1. Clone and install dependencies.
+### Docker Setup
+
+1. Clone the repository.
 
 ```bash
 git clone https://github.com/chebiik04-arch/smart-water-map.git
 cd smart-water-map
+```
+
+2. Build and start the stack.
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- `postgres`: PostgreSQL with PostGIS.
+- `migrate`: one-shot Prisma schema sync using `prisma db push`.
+- `server`: Express, Socket.io, JWT, cron jobs, and API routes.
+- `client`: production Vite build served by Nginx.
+
+3. Seed demo data when needed.
+
+```bash
+docker compose --profile seed up seed
+```
+
+4. Open the app.
+
+Client: `http://localhost:5174`
+
+API: `http://localhost:4001`
+
+Postgres is exposed on host port `5433` and container port `5432`.
+
+Seeded admin login:
+
+```text
+admin@smartwater.local
+AdminPass123
+```
+
+Useful Docker scripts:
+
+```bash
+npm run docker:up
+npm run docker:seed
+npm run docker:logs
+npm run docker:down
+```
+
+### Local Node Setup
+
+1. Install dependencies.
+
+```bash
 npm install
 ```
 
@@ -124,13 +179,6 @@ npm run dev
 Client: `http://localhost:5173`
 
 API: `http://localhost:4000`
-
-Seeded admin login:
-
-```text
-admin@smartwater.local
-AdminPass123
-```
 
 ## API Routes
 

@@ -10,6 +10,10 @@
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
     "build": "npm run build --workspace server && npm run build --workspace client",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:seed": "docker compose --profile seed up seed",
+    "docker:logs": "docker compose logs -f server client",
     "lint": "npm run lint --workspace server && npm run lint --workspace client",
     "prisma:generate": "npm run prisma:generate --workspace server",
     "prisma:migrate": "npm run prisma:migrate --workspace server",
@@ -19,4 +23,3 @@
     "concurrently": "^9.1.2"
   }
 }
-
