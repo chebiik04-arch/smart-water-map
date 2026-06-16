@@ -31,11 +31,15 @@ smart-water-map/
       routes/
         ProtectedRoute.jsx
         router.jsx
+      i18n/translations.js
       services/
         api.js
         socket.js
       stores/authStore.js
+      stores/languageStore.js
       utils/geoHelpers.js
+      utils/offlineReports.js
+      utils/photoEvidence.js
       main.jsx
       styles.css
     .env.example
@@ -87,6 +91,7 @@ smart-water-map/
 - Backend: Node.js, Express, Prisma, PostgreSQL/PostGIS, Socket.io, JWT, node-cron.
 - Frontend: React, Vite, Tailwind CSS, React Router v6, Zustand, Leaflet/react-leaflet, Recharts.
 - Advanced GIS: drought timelapse, borehole infrastructure, conflict-risk overlays, flood/drought event layers, and Three.js groundwater terrain.
+- Field collection: offline-first PWA reporting, compressed photo evidence with GPS tagging, multilingual UI, IVR/WhatsApp intake stubs, and contributor points.
 - API versioning: all application routes live under `/api/v1`.
 
 ## Setup
@@ -196,6 +201,10 @@ API: `http://localhost:4000`
 - `POST /api/v1/alerts/:id/resolve`
 - `GET /api/v1/community/reports`
 - `POST /api/v1/community/report`
+- `POST /api/v1/community/reports/:id/verify`
+- `GET /api/v1/community/leaderboard`
+- `POST /api/v1/community/voice/ivr`
+- `POST /api/v1/community/voice/whatsapp`
 - `GET /api/v1/forecasts/:districtId`
 - `GET /api/v1/dashboard/summary`
 - `GET /api/v1/map-layers/drought-timeline`
@@ -210,6 +219,14 @@ API: `http://localhost:4000`
 - Borehole network map: borehole depth, yield, district, and status markers.
 - Conflict risk overlay: historical water-scarcity conflict risk polygons.
 - Flood-drought duality map: flash flood and drought event footprints on the same operational map.
+
+## Field Reporting
+
+- Offline-first mobile app: Vite PWA manifest, service worker app-shell caching, IndexedDB report queue, and manual/automatic sync when connectivity returns.
+- Photo evidence: camera capture input, browser-side JPEG compression, GPS coordinates, GPS accuracy, and photo metadata attached to reports.
+- Multilingual support: English, Kiswahili, Afaan Oromo, and Somali language selector.
+- Voice reporting: IVR and WhatsApp webhook endpoints accept phone-based water level reports for non-smartphone users.
+- Gamification: verified reports award contributor points and power the community leaderboard.
 
 ## Socket.io Events
 

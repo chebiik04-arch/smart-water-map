@@ -66,6 +66,13 @@ enum HydroEventType {
   DROUGHT
 }
 
+enum ReportSource {
+  MOBILE_APP
+  OFFLINE_SYNC
+  IVR
+  WHATSAPP
+}
+
 model User {
   id               String            @id @default(uuid()) @db.Uuid
   name             String
@@ -73,6 +80,7 @@ model User {
   passwordHash     String
   role             UserRole          @default(community_user)
   district         String?
+  points           Int               @default(0)
   createdAt        DateTime          @default(now())
   communityReports CommunityReport[]
 
@@ -214,6 +222,10 @@ model CommunityReport {
   waterLevel  Float
   description String
   photoUrl    String?
+  photoMetadata Json?
+  gpsAccuracyMeters Float?
+  source      ReportSource @default(MOBILE_APP)
+  externalReporterPhone String?
   status      ReportStatus @default(PENDING)
   createdAt   DateTime     @default(now())
 

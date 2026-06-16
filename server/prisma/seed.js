@@ -37,8 +37,37 @@ async function main() {
       email: "admin@smartwater.local",
       passwordHash: adminPassword,
       role: "admin",
-      district: "Turkana Central"
+      district: "Turkana Central",
+      points: 120
     }
+  });
+  await prisma.user.createMany({
+    data: [
+      {
+        name: "Amina Field Agent",
+        email: "amina.field@smartwater.local",
+        passwordHash: adminPassword,
+        role: "field_agent",
+        district: "Marsabit East",
+        points: 86
+      },
+      {
+        name: "Hassan Community Monitor",
+        email: "hassan.community@smartwater.local",
+        passwordHash: adminPassword,
+        role: "community_user",
+        district: "Isiolo North",
+        points: 64
+      },
+      {
+        name: "Voice Reports",
+        email: "voice-reports@smartwater.local",
+        passwordHash: "external-channel-disabled",
+        role: "community_user",
+        district: "External intake",
+        points: 22
+      }
+    ]
   });
 
   for (const district of districts) {
@@ -125,11 +154,13 @@ async function main() {
 
   for (const district of districts) {
     await prisma.$executeRaw`
-      INSERT INTO "CommunityReport" (id, "userId", "districtId", location, "waterLevel", description, "photoUrl", status, "createdAt")
+      INSERT INTO "CommunityReport" (id, "userId", "districtId", location, "waterLevel", description, "photoUrl",
+        "photoMetadata", "gpsAccuracyMeters", source, status, "createdAt")
       VALUES (gen_random_uuid(), ${admin.id}::uuid, ${district.id}::uuid,
         ST_SetSRID(ST_MakePoint(${district.polygon[0][0] + 0.1}, ${district.polygon[0][1] + 0.1}), 4326),
         ${Math.round(20 + Math.random() * 50)}, ${`Community report for ${district.name}`},
-        NULL, 'VERIFIED'::"ReportStatus", NOW() - interval '2 days')
+        NULL, ${JSON.stringify({ capturedBy: "seed", gpsTagged: true })}::jsonb, ${8 + Math.round(Math.random() * 18)},
+        'MOBILE_APP'::"ReportSource", 'VERIFIED'::"ReportStatus", NOW() - interval '2 days')
     `;
   }
 
