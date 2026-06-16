@@ -5,6 +5,23 @@ import { authenticate } from "../middleware/auth.js";
 
 const router = Router();
 
+router.get("/reports", async (req, res, next) => {
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT cr.id, cr."userId", cr."districtId", cr."waterLevel", cr.description, cr."photoUrl", cr.status, cr."createdAt",
+        u.name AS "userName", d.name AS "districtName", ST_AsGeoJSON(cr.location)::json AS location
+      FROM "CommunityReport" cr
+      JOIN "User" u ON u.id = cr."userId"
+      LEFT JOIN "District" d ON d.id = cr."districtId"
+      ORDER BY cr."createdAt" DESC
+      LIMIT 100
+    `;
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/report", authenticate, async (req, res, next) => {
   try {
     const input = z.object({

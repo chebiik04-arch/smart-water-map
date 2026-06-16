@@ -32,6 +32,7 @@ export const endpoints = {
   satellite: (districtId) => api.get(`/satellite/${districtId}`),
   alerts: () => api.get("/alerts"),
   resolveAlert: (id) => api.post(`/alerts/${id}/resolve`),
+  communityReports: () => api.get("/community/reports"),
   communityReport: (payload) => api.post("/community/report", payload),
   forecasts: (districtId) => api.get(`/forecasts/${districtId}`)
 };
