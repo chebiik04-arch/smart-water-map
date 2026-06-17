@@ -25,6 +25,42 @@ const districts = [
     name: "Isiolo North",
     risk: "NORMAL",
     polygon: [[35.1, -0.05], [35.48, -0.05], [35.48, 0.25], [35.1, 0.25], [35.1, -0.05]]
+  },
+  {
+    id: randomUUID(),
+    name: "Kibwezi East",
+    risk: "EMERGENCY",
+    polygon: [[38.05, -2.25], [38.55, -2.25], [38.55, -2.8], [38.05, -2.8], [38.05, -2.25]]
+  },
+  {
+    id: randomUUID(),
+    name: "Kibwezi West",
+    risk: "WARNING",
+    polygon: [[37.45, -2.2], [38.05, -2.2], [38.05, -2.8], [37.45, -2.8], [37.45, -2.2]]
+  },
+  {
+    id: randomUUID(),
+    name: "Kaiti",
+    risk: "WATCH",
+    polygon: [[37.55, -1.75], [38.05, -1.75], [38.05, -2.2], [37.55, -2.2], [37.55, -1.75]]
+  },
+  {
+    id: randomUUID(),
+    name: "Makueni",
+    risk: "WARNING",
+    polygon: [[37.05, -1.95], [37.55, -1.95], [37.55, -2.45], [37.05, -2.45], [37.05, -1.95]]
+  },
+  {
+    id: randomUUID(),
+    name: "Mbooni",
+    risk: "WARNING",
+    polygon: [[37.35, -1.45], [37.9, -1.45], [37.9, -1.9], [37.35, -1.9], [37.35, -1.45]]
+  },
+  {
+    id: randomUUID(),
+    name: "Kilome",
+    risk: "WATCH",
+    polygon: [[36.9, -1.65], [37.35, -1.65], [37.35, -2.05], [36.9, -2.05], [36.9, -1.65]]
   }
 ];
 
@@ -191,6 +227,8 @@ async function main() {
     `;
   }
 
+  await seedMakueniWaterIntelligence(admin.id);
+
   const apiKey = generateApiKey();
   await prisma.apiKey.create({
     data: {
@@ -219,6 +257,11 @@ async function clearData() {
   await prisma.marketPrice.deleteMany();
   await prisma.$executeRaw`DELETE FROM "LivestockWaterPoint"`;
   await prisma.pastureCondition.deleteMany();
+  await prisma.droughtForecastDriver.deleteMany().catch(() => {});
+  await prisma.waterSourceReading.deleteMany().catch(() => {});
+  await prisma.waterSource.deleteMany().catch(() => {});
+  await prisma.nDVIReading.deleteMany().catch(() => {});
+  await prisma.rainfallRecord.deleteMany().catch(() => {});
   await prisma.sensorReading.deleteMany();
   await prisma.satelliteIndex.deleteMany();
   await prisma.droughtForecast.deleteMany();
@@ -312,12 +355,141 @@ async function seedIrrigationSchedule(districtId) {
   });
 }
 
+async function seedMakueniWaterIntelligence(userId) {
+  const makueniDistricts = districts.filter((district) => ["Kibwezi East", "Kibwezi West", "Kaiti", "Makueni", "Mbooni", "Kilome"].includes(district.name));
+  const months = lastSixMonths();
+  const sourceTypes = ["BOREHOLE", "WATER_POINT", "RIVER", "RESERVOIR"];
+  const statuses = ["ACTIVE", "ACTIVE", "ACTIVE", "DRY", "UNDER_REPAIR", "ABANDONED"];
+  const waterSources = [];
+
+  for (const [districtIndex, district] of makueniDistricts.entries()) {
+    for (const [monthIndex, month] of months.entries()) {
+      await prisma.nDVIReading.create({
+        data: {
+          districtId: district.id,
+          value: Number((0.7 - districtIndex * 0.035 - monthIndex * 0.045).toFixed(2)),
+          capturedAt: new Date(`${month}-15T00:00:00.000Z`)
+        }
+      }).catch(async () => {
+        await prisma.$executeRaw`
+          INSERT INTO "NDVIReading" (id, "districtId", value, "capturedAt", source)
+          VALUES (gen_random_uuid(), ${district.id}::uuid,
+            ${Number((0.7 - districtIndex * 0.035 - monthIndex * 0.045).toFixed(2))},
+            ${new Date(`${month}-15T00:00:00.000Z`)}, 'Sentinel-2')
+        `;
+      });
+      await prisma.rainfallRecord.upsert({
+        where: { districtId_month_source: { districtId: district.id, month, source: "CHIRPS" } },
+        update: {},
+        create: {
+          districtId: district.id,
+          month,
+          mmTotal: Math.max(4, Math.round(96 - monthIndex * 13 - districtIndex * 4)),
+          source: "CHIRPS"
+        }
+      });
+    }
+
+    for (let i = 0; i < 9; i += 1) {
+      const lng = district.polygon[0][0] + 0.06 + (i % 3) * 0.14;
+      const lat = district.polygon[0][1] + 0.08 + Math.floor(i / 3) * 0.13;
+      const [source] = await prisma.$queryRaw`
+        INSERT INTO "WaterSource" (id, name, type, location, "districtId", status, depth, yield, "lastInspected", "createdAt")
+        VALUES (gen_random_uuid(), ${`${district.name} ${sourceTypes[i % sourceTypes.length].replace("_", " ")} ${i + 1}`},
+          ${sourceTypes[i % sourceTypes.length]}::"WaterSourceType",
+          ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), ${district.id}::uuid,
+          ${statuses[(districtIndex + i) % statuses.length]}::"SourceStatus",
+          ${sourceTypes[i % sourceTypes.length] === "BOREHOLE" ? 45 + i * 7 : null},
+          ${sourceTypes[i % sourceTypes.length] === "BOREHOLE" ? 520 + i * 85 : null},
+          NOW() - (${i + 1} || ' days')::interval, NOW())
+        RETURNING id
+      `;
+      waterSources.push({ ...source, district, index: i });
+    }
+  }
+
+  for (const source of waterSources.slice(0, 50)) {
+    for (const [monthIndex, month] of months.entries()) {
+      await prisma.waterSourceReading.create({
+        data: {
+          sourceId: source.id,
+          waterLevel: Number((-7 - monthIndex * 1.7 - source.index * 0.25).toFixed(1)),
+          turbidity: Number((1.5 + (source.index % 4) * 0.6).toFixed(1)),
+          ph: Number((6.8 + (source.index % 3) * 0.12).toFixed(1)),
+          timestamp: new Date(`${month}-20T00:00:00.000Z`)
+        }
+      });
+    }
+  }
+
+  const makueni = makueniDistricts.find((district) => district.name === "Kibwezi East") || makueniDistricts[0];
+  const forecast = await prisma.droughtForecast.create({
+    data: {
+      districtId: makueni.id,
+      forecastDate: daysAgo(1),
+      predictedSeverity: "WARNING",
+      confidenceScore: 0.86,
+      riskScore: 0.78,
+      riskLabel: "High Risk",
+      recommendation: ["Increase water harvesting", "Monitor boreholes closely"],
+      modelVersion: "mockup-composite-v1",
+      drivers: {
+        create: [
+          { factor: "Rainfall Deficit", direction: "DOWN", impact: "HIGH" },
+          { factor: "Temperature Anomaly", direction: "UP", impact: "HIGH" },
+          { factor: "Vegetation Health", direction: "DOWN", impact: "MEDIUM" },
+          { factor: "Soil Moisture", direction: "DOWN", impact: "MEDIUM" }
+        ]
+      }
+    }
+  });
+
+  const alertSeeds = [
+    ["Kibwezi East", "HIGH_DROUGHT_RISK", "EMERGENCY", "High Drought Risk", 2],
+    ["Mbooni", "LOW_WATER_LEVELS", "WARNING", "Low Water Levels", 4],
+    ["Kilome", "RAINFALL_DEFICIT", "WATCH", "Rainfall Deficit", 6]
+  ];
+  for (const [districtName, alertType, severity, message, hoursAgo] of alertSeeds) {
+    const district = makueniDistricts.find((item) => item.name === districtName);
+    await prisma.droughtAlert.create({
+      data: {
+        districtId: district.id,
+        alertType,
+        severity,
+        subDistrict: `${districtName} Sub-county`,
+        message,
+        triggeredAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000)
+      }
+    });
+  }
+
+  const reportSeeds = [
+    ["Makueni", "Water shortage in Muthwani area", 18, 8],
+    ["Kibwezi East", "Dry borehole in Ikanga village", 8, 7],
+    ["Makueni", "Broken pump at Nziu Mbitini", 32, 28],
+    ["Mbooni", "Livestock water shortage", 26, 32],
+    ["Kilome", "Tanker delivery delayed near Mukaa", 38, 36]
+  ];
+  for (const [districtName, description, waterLevel, hoursAgo] of reportSeeds) {
+    const district = makueniDistricts.find((item) => item.name === districtName);
+    await prisma.$executeRaw`
+      INSERT INTO "CommunityReport" (id, "userId", "districtId", location, "waterLevel", description, source, status, "createdAt")
+      VALUES (gen_random_uuid(), ${userId}::uuid, ${district.id}::uuid,
+        ST_SetSRID(ST_MakePoint(${district.polygon[0][0] + 0.18}, ${district.polygon[0][1] + 0.16}), 4326),
+        ${waterLevel}, ${description}, 'MOBILE_APP'::"ReportSource", 'VERIFIED'::"ReportStatus",
+        NOW() - (${hoursAgo} || ' hours')::interval)
+    `;
+  }
+
+  console.info(`Seeded Makueni intelligence data with forecast ${forecast.id}`);
+}
+
 async function seedDroughtSnapshots() {
   const snapshots = [];
   for (const [districtIndex, district] of districts.entries()) {
     for (let week = 15; week >= 0; week -= 1) {
       const spreadPressure = (15 - week) * (4.2 + districtIndex * 0.8);
-      const base = [34, 22, 14][districtIndex];
+      const base = [34, 22, 14][districtIndex] ?? Math.max(18, 48 - districtIndex * 3);
       const score = Math.min(96, base + spreadPressure);
       snapshots.push({
         districtId: district.id,
@@ -331,6 +503,14 @@ async function seedDroughtSnapshots() {
     }
   }
   await prisma.droughtSnapshot.createMany({ data: snapshots });
+}
+
+function lastSixMonths() {
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (5 - index), 1));
+    return date.toISOString().slice(0, 7);
+  });
 }
 
 async function seedBoreholes() {

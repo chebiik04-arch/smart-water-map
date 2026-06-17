@@ -2,17 +2,29 @@ import { Router } from "express";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { emitAlertResolved } from "../services/socket.js";
+import { timeAgo } from "../utils/time.js";
 
 const router = Router();
 
 router.get("/", async (req, res, next) => {
   try {
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit || 100)));
+    const status = req.query.status || "ACTIVE";
+    const where = {
+      ...(req.query.districtId ? { districtId: req.query.districtId } : {}),
+      ...(status === "ACTIVE" ? { resolvedAt: null } : {})
+    };
     const alerts = await prisma.droughtAlert.findMany({
-      where: { resolvedAt: null },
+      where,
       include: { district: { select: { id: true, name: true, droughtRiskLevel: true } } },
-      orderBy: { triggeredAt: "desc" }
+      orderBy: { triggeredAt: "desc" },
+      take: limit
     });
-    res.json(alerts);
+    res.json(alerts.map((alert) => ({
+      ...alert,
+      subDistrict: alert.subDistrict || alert.district?.name,
+      timeAgo: timeAgo(alert.triggeredAt)
+    })));
   } catch (err) {
     next(err);
   }
@@ -32,4 +44,3 @@ router.post("/:id/resolve", authenticate, requireRole("admin"), async (req, res,
 });
 
 export default router;
-

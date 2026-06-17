@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip } from "react-leaflet";
 import {
   AlertTriangle,
@@ -114,17 +115,6 @@ const riskColors = {
 };
 
 export function DashboardPage() {
-  const [summary, setSummary] = useState({
-    activeAlerts: 18,
-    sensorsOnline: 22,
-    districtsAtRisk: 1,
-    recentCommunityReports: []
-  });
-  const [districts, setDistricts] = useState(fallbackDistrict);
-  const [sensors, setSensors] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [reports, setReports] = useState([]);
-  const [boreholes, setBoreholes] = useState([]);
   const [activeBasemap, setActiveBasemap] = useState("OpenStreetMap");
   const [layers, setLayers] = useState({
     boreholes: true,
@@ -137,38 +127,48 @@ export function DashboardPage() {
     reports: true
   });
 
-  useEffect(() => {
-    Promise.allSettled([
-      endpoints.summary(),
-      endpoints.districts(),
-      endpoints.sensors(),
-      endpoints.alerts(),
-      endpoints.communityReports(),
-      endpoints.boreholes()
-    ]).then(([summaryRes, districtRes, sensorRes, alertRes, reportRes, boreholeRes]) => {
-      if (summaryRes.status === "fulfilled") setSummary((current) => ({ ...current, ...summaryRes.value.data }));
-      if (districtRes.status === "fulfilled") setDistricts(districtRes.value.data);
-      if (sensorRes.status === "fulfilled") setSensors(sensorRes.value.data);
-      if (alertRes.status === "fulfilled") setAlerts(alertRes.value.data);
-      if (reportRes.status === "fulfilled") setReports(reportRes.value.data);
-      if (boreholeRes.status === "fulfilled") setBoreholes(boreholeRes.value.data);
-    });
-  }, []);
+  const { data: dashboardData = {} } = useQuery({
+    queryKey: ["dashboard-page-data"],
+    queryFn: async () => {
+      const [summaryRes, districtRes, sensorRes, alertRes, reportRes, boreholeRes] = await Promise.allSettled([
+        endpoints.dashboardSummary(),
+        endpoints.districts(),
+        endpoints.sensors(),
+        endpoints.alerts({ limit: 5, status: "ACTIVE" }),
+        endpoints.communityReports({ limit: 5 }),
+        endpoints.boreholes()
+      ]);
+      return {
+        summary: summaryRes.status === "fulfilled" ? summaryRes.value.data : {},
+        districts: districtRes.status === "fulfilled" ? districtRes.value.data : fallbackDistrict,
+        sensors: sensorRes.status === "fulfilled" ? sensorRes.value.data : [],
+        alerts: alertRes.status === "fulfilled" ? alertRes.value.data : [],
+        reports: reportRes.status === "fulfilled" ? reportRes.value.data : [],
+        boreholes: boreholeRes.status === "fulfilled" ? boreholeRes.value.data : []
+      };
+    }
+  });
 
-  const onlineSensors = sensors.filter((sensor) => sensor.status === "ONLINE").length || summary.sensorsOnline || 22;
-  const waterSources = Math.max(124, boreholes.length + reports.length + 98);
-  const activeWaterSources = Math.max(98, boreholes.filter((item) => item.status === "FUNCTIONAL").length + 96);
-  const alertCount = alerts.length || summary.activeAlerts || 18;
+  const summary = dashboardData.summary || {};
+  const districts = dashboardData.districts || fallbackDistrict;
+  const sensors = dashboardData.sensors || [];
+  const alerts = dashboardData.alerts || [];
+  const reports = dashboardData.reports || [];
+  const boreholes = dashboardData.boreholes || [];
+  const onlineSensors = sensors.filter((sensor) => sensor.status === "ONLINE").length || summary.sensors?.online || summary.sensorsOnline || 22;
+  const waterSourceTotal = summary.waterSources?.total || Math.max(124, boreholes.length + reports.length + 98);
+  const activeWaterSources = summary.waterSources?.active || Math.max(98, boreholes.filter((item) => item.status === "FUNCTIONAL").length + 96);
+  const alertCount = summary.alertsToday || alerts.length || summary.activeAlerts || 18;
   const recentReports = reports.length ? reports : summary.recentCommunityReports || [];
-  const riskLevel = alertCount > 10 || summary.districtsAtRisk ? "HIGH" : "MODERATE";
-  const droughtScore = riskLevel === "HIGH" ? 0.78 : 0.54;
+  const riskLevel = summary.droughtRisk?.level || (alertCount > 10 || summary.districtsAtRisk ? "HIGH" : "MODERATE");
+  const droughtScore = summary.droughtRisk?.score || (riskLevel === "HIGH" ? 0.78 : 0.54);
   const mapPoints = useMemo(() => buildMapPoints({ sensors, reports, boreholes }), [sensors, reports, boreholes]);
 
   return (
     <section className="space-y-4 bg-[#F5F6F4] p-4 text-[#17201d] lg:p-5">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.1fr_.7fr_.75fr]">
-        <MetricCard title="Water Sources" value={waterSources} subtext={`Active: ${activeWaterSources}`} icon={Droplet} iconClass="bg-blue-500 text-white" />
-        <MetricCard title="Active Sensors" value={summary.sensorsOnline || onlineSensors} subtext={`Online: ${onlineSensors}`} icon={Wifi} iconClass="bg-emerald-100 text-emerald-700" />
+        <MetricCard title="Water Sources" value={waterSourceTotal} subtext={`Active: ${activeWaterSources}`} icon={Droplet} iconClass="bg-blue-500 text-white" />
+        <MetricCard title="Active Sensors" value={summary.sensors?.total || summary.sensorsOnline || onlineSensors} subtext={`Online: ${onlineSensors}`} icon={Wifi} iconClass="bg-emerald-100 text-emerald-700" />
         <MetricCard title="Drought Risk Level" value={riskLevel} subtext={`Score: ${droughtScore.toFixed(2)}`} icon={TrendingUp} danger />
         <MetricCard title="Alerts (Today)" value={alertCount} subtext="View all alerts" compact />
         <article className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">

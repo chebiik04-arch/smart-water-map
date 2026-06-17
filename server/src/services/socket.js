@@ -24,8 +24,21 @@ export function emitAlertNew(alert) {
   ioInstance?.to(`district:${alert.districtId}`).emit("alert:new", alert);
 }
 
+export function emitWaterSourceUpdate(update) {
+  ioInstance?.emit("watersource:update", update);
+  if (update.districtId) {
+    ioInstance?.to(`district:${update.districtId}`).emit("watersource:update", update);
+  }
+}
+
+export function emitForecastUpdated(forecast) {
+  ioInstance?.emit("forecast:updated", forecast);
+  if (forecast.districtId) {
+    ioInstance?.to(`district:${forecast.districtId}`).emit("forecast:updated", forecast);
+  }
+}
+
 export function emitAlertResolved(alert) {
   ioInstance?.emit("alert:resolved", alert);
   ioInstance?.to(`district:${alert.districtId}`).emit("alert:resolved", alert);
 }
-

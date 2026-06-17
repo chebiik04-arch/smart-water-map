@@ -19,11 +19,12 @@ import {
 import { useAuthStore } from "../stores/authStore";
 import { useLanguageStore } from "../stores/languageStore";
 import { languages } from "../i18n/translations";
+import { WeatherWidget } from "../components/layout/WeatherWidget";
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
-  { to: "/map", label: "Water Map", icon: Map },
-  { to: "/advisory", label: "Water Sources", icon: Droplet },
+  { to: "/water-map", label: "Water Map", icon: Map },
+  { to: "/water-sources", label: "Water Sources", icon: Droplet },
   { to: "/sensors", label: "Sensors", icon: RadioTower },
   { to: "/operations", label: "Rainfall", icon: CloudRain },
   { to: "/forecasts", label: "Vegetation (NDVI)", icon: Sprout },
@@ -37,6 +38,8 @@ const links = [
 
 const pageTitles = {
   "/dashboard": "Dashboard",
+  "/water-map": "Water Map",
+  "/water-sources": "Water Sources",
   "/map": "Water Map",
   "/sensors": "Sensors",
   "/operations": "Rainfall",
@@ -96,16 +99,8 @@ export function AppLayout() {
           ))}
         </nav>
 
-        <div className="mx-5 mb-6 border-t border-white/15 pt-5">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <CloudRain size={22} className="text-sky-300" />
-            Makueni Weather
-          </div>
-          <p className="mt-4 text-3xl font-bold">27°C</p>
-          <p className="text-sm text-white/85">Cloudy</p>
-          <p className="mt-3 text-sm text-white/85">Humidity: 54%</p>
-          <p className="text-sm text-white/85">Wind: 18 km/h</p>
-          <button className="mt-4 text-sm font-medium text-emerald-300">View full forecast</button>
+        <div className="mx-5 mb-6">
+          <WeatherWidget />
         </div>
       </aside>
 

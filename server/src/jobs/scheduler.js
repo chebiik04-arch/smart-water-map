@@ -3,10 +3,13 @@ import { prisma } from "../config/prisma.js";
 import { calculateDroughtScore } from "../utils/droughtScore.js";
 import { dispatchAlert } from "../utils/alertDispatcher.js";
 import { createSensorReading } from "../services/readingService.js";
-import { emitAlertNew } from "../services/socket.js";
+import { emitAlertNew, emitForecastUpdated, emitWaterSourceUpdate } from "../services/socket.js";
+import { clamp } from "../utils/time.js";
 
 export function registerJobs() {
   cron.schedule("*/15 * * * *", pollSensorsAndCheckThresholds);
+  cron.schedule("0 */6 * * *", recalculateDroughtForecasts);
+  cron.schedule("*/30 * * * *", checkWaterSourceReadings);
   cron.schedule("0 * * * *", recalculateDistrictRisk);
   cron.schedule("10 * * * *", checkSensorHealth);
   cron.schedule("0 6 * * *", dispatchDailyAlerts);
@@ -21,6 +24,7 @@ export async function pollSensorsAndCheckThresholds() {
       const alert = await prisma.droughtAlert.create({
         data: {
           districtId: sensor.districtId,
+          alertType: "SENSOR_OFFLINE",
           severity: simulated.value < 20 ? "EMERGENCY" : "WARNING",
           message: `${sensor.type} threshold breach: ${simulated.value}${simulated.unit}`
         }
@@ -88,11 +92,110 @@ export async function checkSensorHealth(staleHours = Number(process.env.SENSOR_S
     const alert = await prisma.droughtAlert.create({
       data: {
         districtId: sensor.districtId,
+        alertType: "SENSOR_OFFLINE",
         severity: "WATCH",
         message: `Sensor health alert: ${sensor.type} sensor in ${sensor.district.name} has not pinged for ${hours.toFixed(1)} hours.`
       }
     });
     emitAlertNew(alert);
+  }
+}
+
+export async function recalculateDroughtForecasts() {
+  const districts = await prisma.district.findMany();
+  for (const district of districts) {
+    const latestNdvi = await prisma.nDVIReading.findFirst({
+      where: { districtId: district.id },
+      orderBy: { capturedAt: "desc" }
+    }).catch(() => null);
+    const latestSmap = await prisma.satelliteIndex.findFirst({
+      where: { districtId: district.id, indexType: "SMAP" },
+      orderBy: { capturedAt: "desc" }
+    });
+    const rainfall = await prisma.rainfallRecord.findFirst({
+      where: { districtId: district.id },
+      orderBy: { month: "desc" }
+    }).catch(() => null);
+    const groundwater = await prisma.$queryRaw`
+      SELECT AVG(wsr."waterLevel")::float AS depth
+      FROM "WaterSourceReading" wsr
+      JOIN "WaterSource" ws ON ws.id = wsr."sourceId"
+      WHERE ws."districtId" = ${district.id}::uuid
+        AND wsr.timestamp >= NOW() - interval '30 days'
+    `.catch(() => [{ depth: -12 }]);
+
+    const historicalAvgMm = 55;
+    const baselineDepth = -8;
+    const currentDepth = groundwater[0]?.depth ?? -12;
+    const rainfallScore = ((rainfall?.mmTotal ?? 32) - historicalAvgMm) / historicalAvgMm;
+    const ndviScore = 1 - (latestNdvi?.value ?? 0.42);
+    const groundwaterScore = Math.abs((currentDepth - baselineDepth) / baselineDepth);
+    const soilScore = 1 - (latestSmap?.value ?? 0.42);
+    const riskScore = clamp(Math.abs(rainfallScore) * 0.3 + ndviScore * 0.25 + groundwaterScore * 0.25 + soilScore * 0.2);
+    const riskLabel = riskScore < 0.3 ? "Low Risk" : riskScore < 0.5 ? "Moderate" : riskScore <= 0.75 ? "High Risk" : "Critical";
+    const predictedSeverity = riskScore > 0.75 ? "EMERGENCY" : riskScore > 0.5 ? "WARNING" : riskScore > 0.3 ? "WATCH" : "NORMAL";
+
+    const forecast = await prisma.droughtForecast.create({
+      data: {
+        districtId: district.id,
+        forecastDate: new Date(),
+        predictedSeverity,
+        confidenceScore: 0.82,
+        riskScore: Number(riskScore.toFixed(2)),
+        riskLabel,
+        recommendation: ["Increase water harvesting", "Monitor boreholes closely"],
+        modelVersion: "composite-v2",
+        drivers: {
+          create: [
+            { factor: "Rainfall Deficit", direction: "DOWN", impact: Math.abs(rainfallScore) > 0.35 ? "HIGH" : "MEDIUM" },
+            { factor: "Temperature Anomaly", direction: "UP", impact: "HIGH" },
+            { factor: "Vegetation Health", direction: "DOWN", impact: ndviScore > 0.5 ? "HIGH" : "MEDIUM" },
+            { factor: "Soil Moisture", direction: "DOWN", impact: soilScore > 0.5 ? "HIGH" : "MEDIUM" }
+          ]
+        }
+      },
+      include: { drivers: true }
+    });
+    emitForecastUpdated(forecast);
+
+    if (riskScore > 0.6) {
+      const existing = await prisma.droughtAlert.findFirst({
+        where: { districtId: district.id, alertType: "HIGH_DROUGHT_RISK", resolvedAt: null }
+      });
+      if (!existing) {
+        const alert = await prisma.droughtAlert.create({
+          data: {
+            districtId: district.id,
+            alertType: "HIGH_DROUGHT_RISK",
+            severity: riskScore > 0.75 ? "EMERGENCY" : "WARNING",
+            subDistrict: district.name,
+            message: `${district.name} drought forecast risk is ${Math.round(riskScore * 100)}%.`
+          }
+        });
+        emitAlertNew(alert);
+      }
+    }
+  }
+}
+
+export async function checkWaterSourceReadings() {
+  const threshold = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const staleSources = await prisma.waterSource.findMany({
+    where: {
+      status: "ACTIVE",
+      OR: [
+        { readings: { none: {} } },
+        { readings: { none: { timestamp: { gte: threshold } } } }
+      ]
+    }
+  }).catch(() => []);
+
+  for (const source of staleSources) {
+    const updated = await prisma.waterSource.update({
+      where: { id: source.id },
+      data: { status: "UNDER_REPAIR" }
+    });
+    emitWaterSourceUpdate({ ...updated, reason: "No reading in 48 hours" });
   }
 }
 

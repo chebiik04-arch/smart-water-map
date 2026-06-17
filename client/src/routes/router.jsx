@@ -14,6 +14,8 @@ import { OperationsPage } from "../pages/OperationsPage";
 import { SimulationsPage } from "../pages/SimulationsPage";
 import { DeveloperPortalPage } from "../pages/DeveloperPortalPage";
 import { AdvisoryPage } from "../pages/AdvisoryPage";
+import { WaterMap } from "../pages/WaterMap";
+import { WaterSources } from "../pages/WaterSources";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -26,6 +28,8 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="/dashboard" replace /> },
           { path: "/dashboard", element: <DashboardPage /> },
           { path: "/map", element: <MapPage /> },
+          { path: "/water-map", element: <WaterMap /> },
+          { path: "/water-sources", element: <WaterSources /> },
           { path: "/districts/:id", element: <DistrictDetailPage /> },
           { path: "/sensors", element: <SensorsPage /> },
           { path: "/operations", element: <OperationsPage /> },

@@ -2,11 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { timeAgo } from "../utils/time.js";
 
 const router = Router();
 
 router.get("/reports", async (req, res, next) => {
   try {
+    const districtId = req.query.districtId || null;
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit || 100)));
     const rows = await prisma.$queryRaw`
       SELECT cr.id, cr."userId", cr."districtId", cr."waterLevel", cr.description, cr."photoUrl",
         cr."photoMetadata", cr."gpsAccuracyMeters", cr.source, cr."externalReporterPhone", cr.status, cr."createdAt",
@@ -14,10 +17,16 @@ router.get("/reports", async (req, res, next) => {
       FROM "CommunityReport" cr
       LEFT JOIN "User" u ON u.id = cr."userId"
       LEFT JOIN "District" d ON d.id = cr."districtId"
+      WHERE (${districtId}::uuid IS NULL OR cr."districtId" = ${districtId}::uuid)
       ORDER BY cr."createdAt" DESC
-      LIMIT 100
+      LIMIT ${limit}
     `;
-    res.json(rows);
+    res.json(rows.map((row) => ({
+      ...row,
+      reporterName: row.userName || row.externalReporterPhone || "Community reporter",
+      timeAgo: timeAgo(row.createdAt),
+      severityColor: severityColor(row.waterLevel, row.status)
+    })));
   } catch (err) {
     next(err);
   }
@@ -138,6 +147,13 @@ async function createExternalReport(input) {
       ST_AsGeoJSON(location)::json AS location
   `;
   return report;
+}
+
+function severityColor(waterLevel, status) {
+  if (status === "REJECTED") return "gray";
+  if (waterLevel <= 20) return "red";
+  if (waterLevel <= 45) return "orange";
+  return "yellow";
 }
 
 export default router;

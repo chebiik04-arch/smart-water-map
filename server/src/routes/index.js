@@ -12,6 +12,11 @@ import developerRoutes from "./developer.js";
 import publicApiRoutes from "./publicApi.js";
 import simulationRoutes from "./simulations.js";
 import advisoryRoutes from "./advisory.js";
+import waterSourceRoutes from "./waterSources.js";
+import mapRoutes from "./map.js";
+import { groundwaterRouter, ndviRouter, rainfallRouter } from "./analytics.js";
+import weatherRoutes from "./weather.js";
+import reportRoutes from "./reports.js";
 
 const router = Router();
 
@@ -28,5 +33,12 @@ router.use("/developer", developerRoutes);
 router.use("/public", publicApiRoutes);
 router.use("/simulations", simulationRoutes);
 router.use("/advisory", advisoryRoutes);
+router.use("/water-sources", waterSourceRoutes);
+router.use("/map", mapRoutes);
+router.use("/ndvi", ndviRouter);
+router.use("/rainfall", rainfallRouter);
+router.use("/groundwater", groundwaterRouter);
+router.use("/weather", weatherRoutes);
+router.use("/reports", reportRoutes);
 
 export default router;
