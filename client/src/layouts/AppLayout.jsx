@@ -64,65 +64,60 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-[#F5F6F4] text-[#17201d]">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 bg-gradient-to-b from-[#006B58] to-[#003A32] text-white lg:flex lg:flex-col">
-        <Link to="/dashboard" className="flex h-20 items-center gap-3 px-5">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-white/10">
-            <Droplet className="fill-blue-400 text-blue-400" size={28} />
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[190px] bg-gradient-to-b from-[#006B58] to-[#003A32] text-white lg:flex lg:flex-col">
+        <Link to="/dashboard" className="flex h-16 items-center gap-2 px-4">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10">
+            <Droplet className="fill-blue-400 text-blue-400" size={23} />
           </span>
           <span>
-            <span className="block text-xl font-bold leading-tight">Smart Water</span>
-            <span className="block text-sm text-white/85">Intelligence Platform</span>
+            <span className="block text-sm font-bold leading-tight">Smart Water</span>
+            <span className="block text-[10px] text-white/85">Intelligence Platform</span>
           </span>
         </Link>
 
         <nav className="flex-1 space-y-1 px-3">
           {visibleLinks.map(({ to, label, icon: Icon, badge, disabled }) => (
             disabled ? (
-              <div key={to} className="flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium text-white/80">
-                <Icon size={18} /> <span className="flex-1">{label}</span>
+              <div key={to} className="flex items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-white/80">
+                <Icon size={15} /> <span className="flex-1">{label}</span>
               </div>
             ) : (
               <NavLink
                 key={to}
                 to={to}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition ${
+                  `flex items-center gap-2 rounded-md px-2 py-2 text-xs font-medium transition ${
                     isActive ? "bg-emerald-500/80 text-white shadow-sm" : "text-white/90 hover:bg-white/10"
                   }`
                 }
               >
-                <Icon size={18} />
+                <Icon size={15} />
                 <span className="flex-1">{label}</span>
-                {badge && <span className="rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-bold text-white">{badge}</span>}
+                {badge && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{badge}</span>}
               </NavLink>
             )
           ))}
         </nav>
 
-        <div className="mx-5 mb-6">
+        <div className="mx-4 mb-5">
           <WeatherWidget />
         </div>
       </aside>
 
-      <main className="lg:pl-60">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-black/10 bg-white px-4 shadow-sm">
+      <main className="lg:pl-[190px]">
+        <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-black/10 bg-white px-4 shadow-sm">
           <div className="flex items-center gap-4">
             <button className="grid h-10 w-10 place-items-center rounded-md text-black/65 hover:bg-black/5" aria-label="Open menu">
               <Menu size={21} />
             </button>
             <div className="flex items-baseline gap-3">
-              <h1 className="text-xl font-bold">{title}</h1>
-              <p className="hidden text-sm text-black/55 sm:block">Makueni County, Kenya</p>
+              <h1 className="text-lg font-bold">{title}</h1>
+              <p className="hidden text-xs text-black/55 sm:block">Makueni County, Kenya</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value)}
-              className="hidden rounded-md border border-black/10 bg-white px-2 py-2 text-sm md:block"
-              aria-label="Language"
-            >
+            <select value={language} onChange={(event) => setLanguage(event.target.value)} className="hidden rounded-md border border-black/10 bg-white px-2 py-1.5 text-xs md:block" aria-label="Language">
               {languages.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
             </select>
             <TopIcon icon={Bell} badge="12" label="Notifications" />

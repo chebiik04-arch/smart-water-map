@@ -7,7 +7,6 @@ import {
   ArrowRight,
   ArrowUp,
   CloudRain,
-  Download,
   Droplet,
   Layers,
   Sprout,
@@ -166,16 +165,11 @@ export function DashboardPage() {
 
   return (
     <section className="space-y-4 bg-[#F5F6F4] p-4 text-[#17201d] lg:p-5">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.1fr_.7fr_.75fr]">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Water Sources" value={waterSourceTotal} subtext={`Active: ${activeWaterSources}`} icon={Droplet} iconClass="bg-blue-500 text-white" />
         <MetricCard title="Active Sensors" value={summary.sensors?.total || summary.sensorsOnline || onlineSensors} subtext={`Online: ${onlineSensors}`} icon={Wifi} iconClass="bg-emerald-100 text-emerald-700" />
         <MetricCard title="Drought Risk Level" value={riskLevel} subtext={`Score: ${droughtScore.toFixed(2)}`} icon={TrendingUp} danger />
         <MetricCard title="Alerts (Today)" value={alertCount} subtext="View all alerts" compact />
-        <article className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
-          <button className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800">
-            Export Report <Download size={16} />
-          </button>
-        </article>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
