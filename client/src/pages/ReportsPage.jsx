@@ -159,7 +159,7 @@ export function ReportsPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(320px,420px)_1fr]">
         <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-black/10 bg-white p-4 shadow-panel">
-          <select className="w-full rounded-md border border-black/15 px-3 py-2" value={form.districtId} onChange={(e) => setForm({ ...form, districtId: e.target.value })}>
+          <select aria-label="Report district" className="w-full rounded-md border border-black/15 px-3 py-2" value={form.districtId} onChange={(e) => setForm({ ...form, districtId: e.target.value })}>
             <option value="">District</option>
             {districts.map((district) => <option key={district.id} value={district.id}>{district.name}</option>)}
           </select>

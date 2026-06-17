@@ -38,4 +38,5 @@ jobs:
       - run: npm run prisma:deploy --workspace server
       - run: npm run build
       - run: npm test --workspace server
-
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e --workspace client

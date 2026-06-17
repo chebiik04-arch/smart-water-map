@@ -8,3 +8,5 @@ coverage/
 *.log
 server/prisma/dev.db
 server/uploads/
+client/test-results/
+client/playwright-report/

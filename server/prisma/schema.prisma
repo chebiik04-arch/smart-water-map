@@ -133,11 +133,46 @@ enum AlertType {
   COMMUNITY_REPORT
 }
 
+enum MessagingChannel {
+  WHATSAPP
+  IVR
+}
+
+enum ConversationState {
+  STARTED
+  AWAITING_WATER_LEVEL
+  AWAITING_DESCRIPTION
+  AWAITING_LOCATION
+  COMPLETED
+  CANCELLED
+}
+
+enum UploadProvider {
+  LOCAL
+  S3
+  GCS
+  AZURE
+}
+
+enum UploadScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  FAILED
+}
+
+enum MarketImportStatus {
+  SUCCESS
+  FAILED
+}
+
 model Tenant {
   id            String                  @id @default(uuid()) @db.Uuid
   name          String
   slug          String                  @unique
   country       String
+  billingPlan   String                  @default("starter")
+  config        Json?
   createdAt     DateTime                @default(now())
   users         User[]
   districts     District[]
@@ -146,6 +181,10 @@ model Tenant {
   cropVarieties CropVariety[]
   marketPrices  MarketPrice[]
   conflictRisks ConflictRiskArea[]
+  conversations MessagingConversation[]
+  uploadAssets  UploadAsset[]
+  marketImports MarketImportRun[]
+  sensorDevices SensorDevice[]
 }
 
 model User {
@@ -355,10 +394,29 @@ model Sensor {
   lastPing           DateTime?
   readings           SensorReading[]
   maintenanceTickets MaintenanceTicket[]
+  device             SensorDevice?
 
   @@index([type])
   @@index([districtId])
   @@index([status])
+}
+
+model SensorDevice {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String?  @db.Uuid
+  tenant            Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  sensorId          String   @unique @db.Uuid
+  sensor            Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  externalId        String   @unique
+  authTokenHash     String
+  provider          String   @default("generic_http")
+  pollUrl           String?
+  metadata          Json?
+  lastAuthenticated DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([provider])
 }
 
 model MaintenanceTicket {
@@ -534,6 +592,7 @@ model CommunityReport {
   status                ReportStatus                         @default(PENDING)
   createdAt             DateTime                             @default(now())
   moderationActions     ReportModeration[]
+  uploadAssets          UploadAsset[]
 
   @@index([userId])
   @@index([districtId, status])
@@ -549,6 +608,65 @@ model ReportModeration {
   createdAt DateTime        @default(now())
 
   @@index([reportId, createdAt])
+}
+
+model MessagingConversation {
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String?           @db.Uuid
+  tenant          Tenant?           @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  channel         MessagingChannel
+  provider        String
+  externalId      String
+  phone           String
+  state           ConversationState @default(STARTED)
+  payload         Json?
+  reportId        String?           @db.Uuid
+  lastMessageAt   DateTime          @default(now())
+  createdAt       DateTime          @default(now())
+
+  @@unique([channel, provider, externalId])
+  @@index([tenantId, channel, state])
+  @@index([phone, lastMessageAt])
+}
+
+model UploadAsset {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String?          @db.Uuid
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  reportId        String?          @db.Uuid
+  report          CommunityReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  provider        UploadProvider
+  bucket          String?
+  objectKey       String
+  publicUrl       String?
+  signedUrl       String?
+  mimeType        String
+  byteSize        Int
+  checksumSha256  String
+  scanStatus      UploadScanStatus @default(PENDING)
+  moderationLabel String?
+  moderationScore Float?
+  metadata        Json?
+  expiresAt       DateTime?
+  createdAt       DateTime         @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([reportId])
+  @@index([scanStatus])
+}
+
+model MarketImportRun {
+  id             String             @id @default(uuid()) @db.Uuid
+  tenantId       String?            @db.Uuid
+  tenant         Tenant?            @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  provider       String
+  status         MarketImportStatus
+  importedCount  Int                @default(0)
+  errorMessage   String?
+  startedAt      DateTime           @default(now())
+  completedAt    DateTime?
+
+  @@index([tenantId, provider, startedAt])
 }
 
 model DroughtForecast {

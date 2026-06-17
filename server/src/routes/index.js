@@ -17,6 +17,9 @@ import mapRoutes from "./map.js";
 import { groundwaterRouter, ndviRouter, rainfallRouter } from "./analytics.js";
 import weatherRoutes from "./weather.js";
 import reportRoutes from "./reports.js";
+import tenantRoutes from "./tenants.js";
+import uploadRoutes from "./uploads.js";
+import providerSensorRoutes from "./providerSensors.js";
 import { attachTenant } from "../middleware/tenant.js";
 
 const router = Router();
@@ -42,5 +45,8 @@ router.use("/rainfall", rainfallRouter);
 router.use("/groundwater", groundwaterRouter);
 router.use("/weather", weatherRoutes);
 router.use("/reports", reportRoutes);
+router.use("/tenants", tenantRoutes);
+router.use("/uploads", uploadRoutes);
+router.use("/provider/sensors", providerSensorRoutes);
 
 export default router;

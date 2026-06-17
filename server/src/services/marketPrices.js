@@ -1,14 +1,7 @@
-import { env } from "../config/env.js";
+import { fetchNormalizedMarketPrices } from "../providers/marketPriceProvider.js";
 
 export async function fetchExternalMarketPrices() {
-  if (!env.marketPriceApiUrl) return [];
-  const response = await fetch(env.marketPriceApiUrl, {
-    headers: env.marketPriceApiKey ? { Authorization: `Bearer ${env.marketPriceApiKey}` } : {}
-  });
-  if (!response.ok) {
-    throw new Error(`Market price provider failed with ${response.status}`);
-  }
-  return response.json();
+  return fetchNormalizedMarketPrices();
 }
 
 export function marketDecisionHint({ commodity, trend, price }) {
@@ -20,4 +13,3 @@ export function marketDecisionHint({ commodity, trend, price }) {
   if (trend === "FALLING") return "Compare storage and transport costs before waiting.";
   return `Current price is ${price}; monitor nearby markets before committing.`;
 }
-

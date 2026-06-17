@@ -42,7 +42,7 @@ router.post("/:id/resolve", authenticate, requireRole("admin"), async (req, res,
       where: { id: req.params.id },
       data: { resolvedAt: new Date() }
     });
-    emitAlertResolved(alert);
+    emitAlertResolved({ ...alert, tenantId: req.user.tenantId });
     res.json(alert);
   } catch (err) {
     next(err);

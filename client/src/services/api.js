@@ -68,4 +68,11 @@ export const endpoints = {
   cropRecommendations: (districtId) => api.get(`/advisory/crops/recommendations/${districtId}`),
   marketPrices: () => api.get("/advisory/market/prices"),
   livestockWaterStress: () => api.get("/advisory/livestock/water-stress")
+  ,
+  tenants: () => api.get("/tenants"),
+  createTenant: (payload) => api.post("/tenants", payload),
+  updateTenant: (id, payload) => api.patch(`/tenants/${id}`, payload),
+  tenantUsers: (id) => api.get(`/tenants/${id}/users`),
+  createTenantUser: (id, payload) => api.post(`/tenants/${id}/users`, payload),
+  signedUploadUrl: (payload) => api.post("/uploads/signed-url", payload)
 };

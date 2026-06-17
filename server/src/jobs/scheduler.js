@@ -5,7 +5,9 @@ import { dispatchAlert } from "../utils/alertDispatcher.js";
 import { createSensorReading } from "../services/readingService.js";
 import { emitAlertNew, emitForecastUpdated, emitWaterSourceUpdate } from "../services/socket.js";
 import { clamp } from "../utils/time.js";
-import { pollSensorReading } from "../providers/sensorProvider.js";
+import { pollSensorBatch } from "../providers/sensorProvider.js";
+import { fetchNormalizedMarketPrices } from "../providers/marketPriceProvider.js";
+import { marketDecisionHint } from "../services/marketPrices.js";
 
 export function registerJobs() {
   cron.schedule("*/15 * * * *", pollSensorsAndCheckThresholds);
@@ -14,12 +16,15 @@ export function registerJobs() {
   cron.schedule("0 * * * *", recalculateDistrictRisk);
   cron.schedule("10 * * * *", checkSensorHealth);
   cron.schedule("0 6 * * *", dispatchDailyAlerts);
+  cron.schedule("25 * * * *", ingestMarketPrices);
 }
 
 export async function pollSensorsAndCheckThresholds() {
-  const sensors = await prisma.sensor.findMany({ where: { status: "ONLINE" } });
-  for (const sensor of sensors) {
-    const polled = await pollSensorReading(sensor);
+  const sensors = await prisma.sensor.findMany({ where: { status: "ONLINE" }, include: { device: true } });
+  const polledReadings = await pollSensorBatch(sensors);
+  for (const { sensorId, reading: polled } of polledReadings) {
+    const sensor = sensors.find((item) => item.id === sensorId);
+    if (!sensor) continue;
     const reading = await createSensorReading(sensor.id, polled);
     if (isThresholdBreach(sensor.type, polled.value)) {
       const alert = await prisma.droughtAlert.create({
@@ -63,6 +68,33 @@ export async function dispatchDailyAlerts() {
   });
   for (const alert of alerts) {
     await dispatchAlert(alert, []);
+  }
+}
+
+export async function ingestMarketPrices() {
+  const tenants = await prisma.tenant.findMany({ select: { id: true } });
+  const tenantIds = tenants.length ? tenants.map((tenant) => tenant.id) : [null];
+  for (const tenantId of tenantIds) {
+    const run = await prisma.marketImportRun.create({
+      data: { tenantId, provider: process.env.MARKET_PRICE_PROVIDER || "generic", status: "SUCCESS" }
+    });
+    try {
+      const prices = await fetchNormalizedMarketPrices({ force: true });
+      for (const price of prices) {
+        await prisma.marketPrice.create({
+          data: { tenantId, ...price, decisionHint: marketDecisionHint(price) }
+        });
+      }
+      await prisma.marketImportRun.update({
+        where: { id: run.id },
+        data: { importedCount: prices.length, completedAt: new Date() }
+      });
+    } catch (err) {
+      await prisma.marketImportRun.update({
+        where: { id: run.id },
+        data: { status: "FAILED", errorMessage: err.message, completedAt: new Date() }
+      });
+    }
   }
 }
 

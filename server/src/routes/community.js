@@ -6,6 +6,8 @@ import { authenticate, requireRole } from "../middleware/auth.js";
 import { timeAgo } from "../utils/time.js";
 import { saveReportEvidence } from "../services/uploadStorage.js";
 import { sendIvrAcknowledgement, sendWhatsAppMessage } from "../providers/messagingProvider.js";
+import { ivrResponse, parseIvrInbound, parseWhatsAppInbound, verifyInboundSignature } from "../providers/messagingInboundProvider.js";
+import { advanceReportConversation } from "../services/conversationService.js";
 
 const router = Router();
 const upload = multer({
@@ -88,7 +90,7 @@ router.post("/report/upload", authenticate, upload.single("photo"), async (req, 
       gpsAccuracyMeters: z.coerce.number().optional()
     }).parse(req.body);
     await assertDistrictAccess(input.districtId, req.user.tenantId);
-    const stored = await saveReportEvidence(req.file);
+    const stored = await saveReportEvidence(req.file, { tenantId: req.user.tenantId });
     const [report] = await prisma.$queryRaw`
       INSERT INTO "CommunityReport" (id, "userId", "districtId", location, "waterLevel", description, "photoUrl",
         "photoMetadata", "gpsAccuracyMeters", source, status, "createdAt")
@@ -99,6 +101,7 @@ router.post("/report/upload", authenticate, upload.single("photo"), async (req, 
       RETURNING id, "userId", "districtId", "waterLevel", description, "photoUrl", "photoMetadata",
         "gpsAccuracyMeters", source, status, "createdAt", ST_AsGeoJSON(location)::json AS location
     `;
+    await prisma.uploadAsset.update({ where: { id: stored.assetId }, data: { reportId: report.id } }).catch(() => null);
     res.status(201).json(report);
   } catch (err) {
     next(err);
@@ -180,10 +183,18 @@ router.get("/leaderboard", async (req, res, next) => {
 
 router.post("/voice/ivr", async (req, res, next) => {
   try {
-    const input = voiceReportSchema.parse(req.body);
-    const report = await createExternalReport({ ...input, source: "IVR", tenantId: req.tenantId });
-    await sendIvrAcknowledgement({ to: input.phone, message: "Your water level report was received." });
-    res.status(201).json({ report, message: "IVR water level report accepted" });
+    const provider = String(req.query.provider || req.body.provider || "generic");
+    if (!verifyInboundSignature(req, provider)) return res.status(401).json({ error: "Invalid webhook signature" });
+    if (req.body.phone || req.body.latitude) {
+      const input = voiceReportSchema.parse(req.body);
+      const report = await createExternalReport({ ...input, source: "IVR", tenantId: req.tenantId });
+      await sendIvrAcknowledgement({ to: input.phone, message: "Your water level report was received." });
+      return res.status(201).json({ report, message: "IVR water level report accepted" });
+    }
+    const inbound = parseIvrInbound(req.body, provider);
+    const result = await advanceReportConversation({ channel: "IVR", provider, inbound, tenantId: req.tenantId });
+    const response = ivrResponse(provider, result.message, { gather: !result.done });
+    res.type(response.type).status(200).send(response.body);
   } catch (err) {
     next(err);
   }
@@ -191,10 +202,18 @@ router.post("/voice/ivr", async (req, res, next) => {
 
 router.post("/voice/whatsapp", async (req, res, next) => {
   try {
-    const input = voiceReportSchema.parse(req.body);
-    const report = await createExternalReport({ ...input, source: "WHATSAPP", tenantId: req.tenantId });
-    await sendWhatsAppMessage({ to: input.phone, message: "Your water level report was received." });
-    res.status(201).json({ report, message: "WhatsApp water level report accepted" });
+    const provider = String(req.query.provider || req.body.provider || "generic");
+    if (!verifyInboundSignature(req, provider)) return res.status(401).json({ error: "Invalid webhook signature" });
+    if (req.body.latitude && req.body.longitude) {
+      const input = voiceReportSchema.parse(req.body);
+      const report = await createExternalReport({ ...input, source: "WHATSAPP", tenantId: req.tenantId });
+      await sendWhatsAppMessage({ to: input.phone, message: "Your water level report was received." });
+      return res.status(201).json({ report, message: "WhatsApp water level report accepted" });
+    }
+    const inbound = parseWhatsAppInbound(req.body, provider);
+    const result = await advanceReportConversation({ channel: "WHATSAPP", provider, inbound, tenantId: req.tenantId });
+    await sendWhatsAppMessage({ to: inbound.phone, message: result.message });
+    res.status(200).json({ message: result.message, state: result.conversation.state, report: result.report || null });
   } catch (err) {
     next(err);
   }

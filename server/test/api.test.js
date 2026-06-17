@@ -29,10 +29,14 @@ describe("API hardening", () => {
   afterAll(async () => {
     await prisma.apiUsage.deleteMany({ where: { apiKey: { tenantId: { in: [tenant.id, otherTenant.id] } } } });
     await prisma.apiKey.deleteMany({ where: { tenantId: { in: [tenant.id, otherTenant.id] } } });
+    await prisma.marketImportRun.deleteMany({ where: { tenantId: { in: [tenant.id, otherTenant.id] } } });
+    await prisma.messagingConversation.deleteMany({ where: { tenantId: { in: [tenant.id, otherTenant.id] } } });
+    await prisma.uploadAsset.deleteMany({ where: { tenantId: { in: [tenant.id, otherTenant.id] } } });
     await prisma.reportModeration.deleteMany({ where: { report: { user: { tenantId: tenant.id } } } });
     await prisma.communityReport.deleteMany({ where: { user: { tenantId: tenant.id } } });
     await prisma.irrigationSchedule.deleteMany({ where: { districtId: { in: [district.id, otherDistrict.id] } } });
     await prisma.sensorReading.deleteMany({ where: { sensor: { districtId: { in: [district.id, otherDistrict.id] } } } });
+    await prisma.sensorDevice.deleteMany({ where: { tenantId: { in: [tenant.id, otherTenant.id] } } });
     await prisma.sensor.deleteMany({ where: { districtId: { in: [district.id, otherDistrict.id] } } });
     await prisma.user.deleteMany({ where: { tenantId: { in: [tenant.id, otherTenant.id] } } });
     await prisma.district.deleteMany({ where: { id: { in: [district.id, otherDistrict.id] } } });
@@ -90,6 +94,8 @@ describe("API hardening", () => {
 
     const refreshed = await prisma.user.findUnique({ where: { id: user.id } });
     expect(refreshed.points).toBe(10);
+    const asset = await prisma.uploadAsset.findFirst({ where: { reportId: upload.body.id } });
+    expect(asset.scanStatus).toBe("PENDING");
   });
 
   it("blocks advisory writes against another tenant district", async () => {
@@ -149,6 +155,62 @@ describe("API hardening", () => {
 
     await request(app).get("/api/v1/public/districts").set("x-api-key", rawKey).expect(200);
     await request(app).get("/api/v1/public/districts").set("x-api-key", rawKey).expect(429);
+  });
+
+  it("manages tenants and tenant users for admins", async () => {
+    const tenants = await request(app)
+      .get("/api/v1/tenants")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+    expect(tenants.body[0].id).toBe(tenant.id);
+
+    const createdUser = await request(app)
+      .post(`/api/v1/tenants/${tenant.id}/users`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Field Agent", email: `field-${runId}@example.com`, password: "password123", role: "field_agent" })
+      .expect(201);
+    expect(createdUser.body.role).toBe("field_agent");
+  });
+
+  it("maintains WhatsApp conversation state and creates a report", async () => {
+    await request(app)
+      .post("/api/v1/community/voice/whatsapp")
+      .set("x-tenant-slug", tenantSlug)
+      .send({ provider: "generic", phone: "+254700000000", text: "start" })
+      .expect(200);
+    const level = await request(app)
+      .post("/api/v1/community/voice/whatsapp")
+      .set("x-tenant-slug", tenantSlug)
+      .send({ provider: "generic", phone: "+254700000000", text: "19" })
+      .expect(200);
+    expect(level.body.state).toBe("AWAITING_DESCRIPTION");
+    const completed = await request(app)
+      .post("/api/v1/community/voice/whatsapp")
+      .set("x-tenant-slug", tenantSlug)
+      .send({ provider: "generic", phone: "+254700000000", text: "Community pan is dry" })
+      .expect(200);
+    expect(completed.body.state).toBe("COMPLETED");
+    expect(completed.body.report.status).toBe("PENDING");
+  });
+
+  it("registers sensor devices and accepts authenticated device readings", async () => {
+    const sensor = await createSensor(district.id);
+    const deviceToken = `device-token-${runId}`;
+    await request(app)
+      .post("/api/v1/provider/sensors/devices")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ sensorId: sensor.id, externalId: `sensor-${runId}`, authToken: deviceToken })
+      .expect(201);
+
+    await request(app)
+      .post("/api/v1/provider/sensors/readings")
+      .set("x-sensor-id", `sensor-${runId}`)
+      .set("x-sensor-token", deviceToken)
+      .send({ value: 41, unit: "%", metadata: { battery: 88 } })
+      .expect(201);
+
+    const count = await prisma.sensorReading.count({ where: { sensorId: sensor.id } });
+    expect(count).toBeGreaterThan(0);
   });
 });
 

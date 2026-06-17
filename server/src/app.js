@@ -12,6 +12,7 @@ export function createApp() {
   app.use(helmet());
   app.use(cors({ origin: process.env.CLIENT_ORIGIN || true, credentials: true }));
   app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ extended: false }));
   app.use(morgan("combined"));
   app.use("/uploads", express.static(uploadRootPath()));
 
