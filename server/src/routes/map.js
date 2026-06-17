@@ -45,6 +45,9 @@ router.get("/drought-heatmap", async (req, res, next) => {
         LIMIT 1
       ) smap ON true
       WHERE (${districtId}::uuid IS NULL OR s."districtId" = ${districtId}::uuid)
+        AND (${req.tenantId || null}::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM "District" d WHERE d.id = s."districtId" AND d."tenantId" = ${req.tenantId || null}::uuid
+        ))
       LIMIT 300
     `;
 

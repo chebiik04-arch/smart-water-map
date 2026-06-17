@@ -6,6 +6,7 @@ const router = Router();
 router.get("/drought-timeline", async (req, res, next) => {
   try {
     const rows = await prisma.droughtSnapshot.findMany({
+      where: { district: req.tenantId ? { tenantId: req.tenantId } : {} },
       orderBy: [{ weekStart: "asc" }, { districtId: "asc" }],
       include: { district: { select: { name: true } } }
     });
@@ -23,6 +24,7 @@ router.get("/boreholes", async (req, res, next) => {
         ST_AsGeoJSON(b.location)::json AS location
       FROM "Borehole" b
       JOIN "District" d ON d.id = b."districtId"
+      WHERE (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY b.status ASC, b.name ASC
     `;
     res.json(rows);
@@ -37,6 +39,7 @@ router.get("/conflict-risks", async (req, res, next) => {
       SELECT id, name, "riskScore", "incidentsLastYear", notes, "updatedAt",
         ST_AsGeoJSON(geometry)::json AS geometry
       FROM "ConflictRiskArea"
+      WHERE (${req.tenantId || null}::uuid IS NULL OR "tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY "riskScore" DESC
     `;
     res.json(toFeatureCollection(rows, (row) => ({
@@ -58,6 +61,7 @@ router.get("/hydro-events", async (req, res, next) => {
         h."eventDate", h.notes, ST_AsGeoJSON(h.geometry)::json AS geometry
       FROM "HydroEvent" h
       JOIN "District" d ON d.id = h."districtId"
+      WHERE (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY h."eventDate" DESC
     `;
     res.json(toFeatureCollection(rows, (row) => ({

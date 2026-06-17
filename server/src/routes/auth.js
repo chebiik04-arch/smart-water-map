@@ -19,7 +19,9 @@ router.post("/register", async (req, res, next) => {
   try {
     const input = registerSchema.parse(req.body);
     const passwordHash = await bcrypt.hash(input.password, 12);
-    const tenant = await prisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
+    const tenant = req.tenantId
+      ? await prisma.tenant.findUnique({ where: { id: req.tenantId } })
+      : await prisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
     const user = await prisma.user.create({
       data: { tenantId: tenant?.id, name: input.name, email: input.email, passwordHash, role: input.role, district: input.district },
       select: { id: true, tenantId: true, name: true, email: true, role: true, district: true, createdAt: true }

@@ -6,7 +6,7 @@ const router = Router();
 router.get("/:districtId", async (req, res, next) => {
   try {
     const indexes = await prisma.satelliteIndex.findMany({
-      where: { districtId: req.params.districtId },
+      where: { districtId: req.params.districtId, district: req.tenantId ? { tenantId: req.tenantId } : {} },
       orderBy: { capturedAt: "desc" },
       take: 120
     });
@@ -17,4 +17,3 @@ router.get("/:districtId", async (req, res, next) => {
 });
 
 export default router;
-

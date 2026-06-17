@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import apiV1Routes from "./routes/index.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
+import { uploadRootPath } from "./services/uploadStorage.js";
 
 export function createApp() {
   const app = express();
@@ -12,6 +13,7 @@ export function createApp() {
   app.use(cors({ origin: process.env.CLIENT_ORIGIN || true, credentials: true }));
   app.use(express.json({ limit: "2mb" }));
   app.use(morgan("combined"));
+  app.use("/uploads", express.static(uploadRootPath()));
 
   app.get("/health", (req, res) => {
     res.json({ status: "ok", service: "smart-water-map-server" });
@@ -23,4 +25,3 @@ export function createApp() {
 
   return app;
 }
-

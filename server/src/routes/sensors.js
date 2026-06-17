@@ -16,6 +16,7 @@ router.get("/", async (req, res, next) => {
       JOIN "District" d ON d.id = s."districtId"
       WHERE (${type || null}::text IS NULL OR s.type::text = ${type || null})
         AND (${district || null}::uuid IS NULL OR s."districtId" = ${district || null}::uuid)
+        AND (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY s."lastPing" DESC NULLS LAST
     `;
     res.json(rows);
@@ -31,6 +32,11 @@ router.post("/:id/reading", authenticate, requireRole("admin", "field_agent"), a
       unit: z.string().min(1),
       metadata: z.record(z.any()).optional()
     }).parse(req.body);
+    const sensor = await prisma.sensor.findFirst({
+      where: { id: req.params.id, district: req.user.tenantId ? { tenantId: req.user.tenantId } : {} },
+      select: { id: true }
+    });
+    if (!sensor) return res.status(404).json({ error: "Sensor not found" });
     const reading = await createSensorReading(req.params.id, input);
     res.status(201).json(reading);
   } catch (err) {
@@ -42,7 +48,11 @@ router.get("/:id/readings", async (req, res, next) => {
   try {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const readings = await prisma.sensorReading.findMany({
-      where: { sensorId: req.params.id, timestamp: { gte: since } },
+      where: {
+        sensorId: req.params.id,
+        timestamp: { gte: since },
+        sensor: { district: req.tenantId ? { tenantId: req.tenantId } : {} }
+      },
       orderBy: { timestamp: "asc" }
     });
     res.json(readings);
@@ -91,6 +101,11 @@ router.post("/operations/tickets/:id/status", authenticate, requireRole("admin",
       status: z.enum(["OPEN", "ASSIGNED", "IN_PROGRESS", "RESOLVED"]),
       assignedTo: z.string().optional()
     }).parse(req.body);
+    const existing = await prisma.maintenanceTicket.findFirst({
+      where: { id: req.params.id, sensor: { district: req.user.tenantId ? { tenantId: req.user.tenantId } : {} } },
+      select: { id: true }
+    });
+    if (!existing) return res.status(404).json({ error: "Maintenance ticket not found" });
     const ticket = await prisma.maintenanceTicket.update({
       where: { id: req.params.id },
       data: {

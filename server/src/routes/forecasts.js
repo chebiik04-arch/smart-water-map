@@ -6,11 +6,15 @@ const router = Router();
 router.get("/:districtId/latest", async (req, res, next) => {
   try {
     const forecast = await prisma.droughtForecast.findFirst({
-      where: { districtId: req.params.districtId, drivers: { some: {} } },
+      where: {
+        districtId: req.params.districtId,
+        drivers: { some: {} },
+        district: req.tenantId ? { tenantId: req.tenantId } : {}
+      },
       orderBy: { forecastDate: "desc" },
       include: { drivers: true }
     }) || await prisma.droughtForecast.findFirst({
-      where: { districtId: req.params.districtId },
+      where: { districtId: req.params.districtId, district: req.tenantId ? { tenantId: req.tenantId } : {} },
       orderBy: { forecastDate: "desc" },
       include: { drivers: true }
     });
@@ -38,7 +42,7 @@ router.get("/:districtId/latest", async (req, res, next) => {
 router.get("/:districtId", async (req, res, next) => {
   try {
     const forecasts = await prisma.droughtForecast.findMany({
-      where: { districtId: req.params.districtId },
+      where: { districtId: req.params.districtId, district: req.tenantId ? { tenantId: req.tenantId } : {} },
       orderBy: { forecastDate: "asc" },
       take: 30
     });

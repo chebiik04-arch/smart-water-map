@@ -37,7 +37,10 @@ router.get("/readings", async (req, res, next) => {
     const { sensorId } = req.query;
     if (!sensorId) return res.status(400).json({ error: "sensorId is required" });
     const readings = await prisma.sensorReading.findMany({
-      where: { sensorId: String(sensorId) },
+      where: {
+        sensorId: String(sensorId),
+        sensor: { district: req.tenantId ? { tenantId: req.tenantId } : {} }
+      },
       orderBy: { timestamp: "desc" },
       take: 500
     });
@@ -48,4 +51,3 @@ router.get("/readings", async (req, res, next) => {
 });
 
 export default router;
-

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: smart_water_map_test
+          POSTGRES_USER: smart_water
+          POSTGRES_PASSWORD: smart_water_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smart_water -d smart_water_map_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://smart_water:smart_water_password@localhost:5432/smart_water_map_test?schema=public
+      JWT_SECRET: ci-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run prisma:deploy --workspace server
+      - run: npm run build
+      - run: npm test --workspace server
+

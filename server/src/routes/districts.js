@@ -9,6 +9,7 @@ router.get("/", async (req, res, next) => {
       SELECT id, name, "droughtRiskLevel", "createdAt",
         ST_AsGeoJSON(geometry)::json AS geometry
       FROM "District"
+      WHERE (${req.tenantId || null}::uuid IS NULL OR "tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY name ASC
     `;
     res.json({
@@ -35,6 +36,7 @@ router.get("/:id/status", async (req, res, next) => {
       }
     });
     if (!district) return res.status(404).json({ error: "District not found" });
+    if (req.tenantId && district.tenantId !== req.tenantId) return res.status(404).json({ error: "District not found" });
 
     const [sensorCount, reportCount] = await Promise.all([
       prisma.sensor.count({ where: { districtId: district.id, status: "ONLINE" } }),

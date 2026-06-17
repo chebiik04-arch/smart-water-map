@@ -18,6 +18,12 @@ router.post("/irrigation/schedule", authenticate, requireRole("admin", "field_ag
       rainfallForecastMm: z.number().min(0).default(0)
     }).parse(req.body);
 
+    const district = await prisma.district.findFirst({
+      where: { id: input.districtId, ...(req.user.tenantId ? { tenantId: req.user.tenantId } : {}) },
+      select: { id: true }
+    });
+    if (!district) return res.status(404).json({ error: "District not found" });
+
     const metrics = await latestAdvisoryMetrics(input.districtId);
     const advice = buildIrrigationAdvice({
       cropName: input.cropName,
@@ -57,7 +63,9 @@ router.get("/irrigation/schedules", authenticate, async (req, res, next) => {
 
 router.get("/crops/recommendations/:districtId", authenticate, async (req, res, next) => {
   try {
-    const district = await prisma.district.findUnique({ where: { id: req.params.districtId } });
+    const district = await prisma.district.findFirst({
+      where: { id: req.params.districtId, ...(req.user.tenantId ? { tenantId: req.user.tenantId } : {}) }
+    });
     if (!district) return res.status(404).json({ error: "District not found" });
     const metrics = await latestAdvisoryMetrics(district.id);
     const varieties = await prisma.cropVariety.findMany({

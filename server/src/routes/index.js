@@ -17,9 +17,11 @@ import mapRoutes from "./map.js";
 import { groundwaterRouter, ndviRouter, rainfallRouter } from "./analytics.js";
 import weatherRoutes from "./weather.js";
 import reportRoutes from "./reports.js";
+import { attachTenant } from "../middleware/tenant.js";
 
 const router = Router();
 
+router.use(attachTenant);
 router.use("/auth", authRoutes);
 router.use("/districts", districtRoutes);
 router.use("/sensors", sensorRoutes);

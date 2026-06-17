@@ -6,9 +6,19 @@ const router = Router();
 router.get("/export", async (req, res, next) => {
   try {
     const districtId = req.query.districtId || null;
-    const whereDistrict = districtId ? { districtId } : {};
+    const whereDistrict = {
+      ...(districtId ? { districtId } : {}),
+      ...(req.tenantId ? { district: { tenantId: req.tenantId } } : {})
+    };
+    if (districtId) {
+      const district = await prisma.district.findFirst({
+        where: { id: districtId, ...(req.tenantId ? { tenantId: req.tenantId } : {}) },
+        select: { id: true }
+      });
+      if (!district) return res.status(404).json({ error: "District not found" });
+    }
     const [summary, alerts, waterSources, forecast, rainfall] = await Promise.all([
-      buildSummary(districtId),
+      buildSummary(districtId, req.tenantId),
       prisma.droughtAlert.findMany({
         where: { ...whereDistrict, resolvedAt: null },
         orderBy: { triggeredAt: "desc" },
@@ -22,11 +32,11 @@ router.get("/export", async (req, res, next) => {
         select: { id: true, name: true, type: true, status: true, depth: true, yield: true, lastInspected: true }
       }).catch(() => []),
       districtId
-        ? prisma.droughtForecast.findFirst({ where: { districtId }, orderBy: { forecastDate: "desc" }, include: { drivers: true } })
-        : prisma.droughtForecast.findFirst({ orderBy: { forecastDate: "desc" }, include: { drivers: true } }),
+        ? prisma.droughtForecast.findFirst({ where: whereDistrict, orderBy: { forecastDate: "desc" }, include: { drivers: true } })
+        : prisma.droughtForecast.findFirst({ where: req.tenantId ? { district: { tenantId: req.tenantId } } : {}, orderBy: { forecastDate: "desc" }, include: { drivers: true } }),
       districtId
-        ? prisma.rainfallRecord.findMany({ where: { districtId }, orderBy: { month: "desc" }, take: 6 })
-        : prisma.rainfallRecord.findMany({ orderBy: { month: "desc" }, take: 6 })
+        ? prisma.rainfallRecord.findMany({ where: whereDistrict, orderBy: { month: "desc" }, take: 6 })
+        : prisma.rainfallRecord.findMany({ where: req.tenantId ? { district: { tenantId: req.tenantId } } : {}, orderBy: { month: "desc" }, take: 6 })
     ]);
 
     res.type("application/json").json({
@@ -43,8 +53,11 @@ router.get("/export", async (req, res, next) => {
   }
 });
 
-async function buildSummary(districtId) {
-  const whereDistrict = districtId ? { districtId } : {};
+async function buildSummary(districtId, tenantId) {
+  const whereDistrict = {
+    ...(districtId ? { districtId } : {}),
+    ...(tenantId ? { district: { tenantId } } : {})
+  };
   const [waterSourcesTotal, waterSourcesActive, sensorsTotal, sensorsOnline, alertsToday] = await Promise.all([
     prisma.waterSource.count({ where: whereDistrict }).catch(() => 0),
     prisma.waterSource.count({ where: { ...whereDistrict, status: "ACTIVE" } }).catch(() => 0),

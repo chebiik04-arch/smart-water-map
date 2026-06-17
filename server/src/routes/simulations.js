@@ -15,6 +15,12 @@ router.post("/groundwater", authenticate, requireRole("admin", "field_agent"), a
       durationWeeks: z.number().int().min(1).max(104)
     }).parse(req.body);
 
+    const district = await prisma.district.findFirst({
+      where: { id: input.districtId, ...(req.user.tenantId ? { tenantId: req.user.tenantId } : {}) },
+      select: { id: true }
+    });
+    if (!district) return res.status(404).json({ error: "District not found" });
+
     const latest = await prisma.$queryRaw`
       SELECT AVG(r.value)::float AS groundwater
       FROM "Sensor" s

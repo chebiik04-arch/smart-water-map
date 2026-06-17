@@ -5,6 +5,7 @@ import { dispatchAlert } from "../utils/alertDispatcher.js";
 import { createSensorReading } from "../services/readingService.js";
 import { emitAlertNew, emitForecastUpdated, emitWaterSourceUpdate } from "../services/socket.js";
 import { clamp } from "../utils/time.js";
+import { pollSensorReading } from "../providers/sensorProvider.js";
 
 export function registerJobs() {
   cron.schedule("*/15 * * * *", pollSensorsAndCheckThresholds);
@@ -18,15 +19,15 @@ export function registerJobs() {
 export async function pollSensorsAndCheckThresholds() {
   const sensors = await prisma.sensor.findMany({ where: { status: "ONLINE" } });
   for (const sensor of sensors) {
-    const simulated = simulateSensor(sensor.type);
-    const reading = await createSensorReading(sensor.id, simulated);
-    if (isThresholdBreach(sensor.type, simulated.value)) {
+    const polled = await pollSensorReading(sensor);
+    const reading = await createSensorReading(sensor.id, polled);
+    if (isThresholdBreach(sensor.type, polled.value)) {
       const alert = await prisma.droughtAlert.create({
         data: {
           districtId: sensor.districtId,
           alertType: "SENSOR_OFFLINE",
-          severity: simulated.value < 20 ? "EMERGENCY" : "WARNING",
-          message: `${sensor.type} threshold breach: ${simulated.value}${simulated.unit}`
+          severity: polled.value < 20 ? "EMERGENCY" : "WARNING",
+          message: `${sensor.type} threshold breach: ${polled.value}${polled.unit}`
         }
       });
       emitAlertNew(alert);
@@ -220,17 +221,6 @@ async function latestDistrictMetrics(districtId) {
     ndvi: ndvi?.value ?? 0.45,
     rainfallAnomalyPercent: (byType.RAINFALL ?? 70) - 100
   };
-}
-
-function simulateSensor(type) {
-  const ranges = {
-    GROUNDWATER: [20, 85, "%"],
-    SOIL_MOISTURE: [15, 80, "%"],
-    RAINFALL: [0, 40, "mm"],
-    WEATHER: [18, 38, "C"]
-  };
-  const [min, max, unit] = ranges[type] || ranges.WEATHER;
-  return { value: Number((min + Math.random() * (max - min)).toFixed(2)), unit, metadata: { source: "scheduled_poll" } };
 }
 
 function isThresholdBreach(type, value) {

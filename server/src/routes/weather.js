@@ -6,7 +6,9 @@ const router = Router();
 
 router.get("/current", async (req, res, next) => {
   try {
-    const { lat, lng } = await resolveLocation(req.query.districtId);
+    const location = await resolveLocation(req.query.districtId, req.tenantId);
+    if (!location) return res.status(404).json({ error: "District not found" });
+    const { lat, lng } = location;
     const url = new URL("https://api.open-meteo.com/v1/forecast");
     url.searchParams.set("latitude", String(lat));
     url.searchParams.set("longitude", String(lng));
@@ -28,7 +30,7 @@ router.get("/current", async (req, res, next) => {
   }
 });
 
-async function resolveLocation(districtId) {
+async function resolveLocation(districtId, tenantId) {
   if (!districtId) {
     return {
       lat: Number(process.env.MAKUENI_LAT || -1.8),
@@ -40,8 +42,9 @@ async function resolveLocation(districtId) {
       ST_X(ST_Centroid(geometry)::geometry)::float AS lng
     FROM "District"
     WHERE id = ${districtId}::uuid
+      AND (${tenantId || null}::uuid IS NULL OR "tenantId" = ${tenantId || null}::uuid)
   `;
-  return district || { lat: -1.8, lng: 37.6 };
+  return district || null;
 }
 
 function conditionLabel(code) {

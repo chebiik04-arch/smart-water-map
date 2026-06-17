@@ -31,6 +31,7 @@ router.get("/", async (req, res, next) => {
       WHERE (${filters.districtId}::uuid IS NULL OR ws."districtId" = ${filters.districtId}::uuid)
         AND (${filters.type}::"WaterSourceType" IS NULL OR ws.type = ${filters.type}::"WaterSourceType")
         AND (${filters.status}::"SourceStatus" IS NULL OR ws.status = ${filters.status}::"SourceStatus")
+        AND (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY ws.name ASC
     `;
 
@@ -65,6 +66,7 @@ router.get("/:id", async (req, res, next) => {
       FROM "WaterSource" ws
       JOIN "District" d ON d.id = ws."districtId"
       WHERE ws.id = ${req.params.id}::uuid
+        AND (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
     `;
     if (!source) return res.status(404).json({ error: "Water source not found" });
     res.json(source);
@@ -79,7 +81,8 @@ router.get("/:id/readings", async (req, res, next) => {
     const readings = await prisma.waterSourceReading.findMany({
       where: {
         sourceId: req.params.id,
-        timestamp: { gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) }
+        timestamp: { gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) },
+        source: { district: req.tenantId ? { tenantId: req.tenantId } : {} }
       },
       orderBy: { timestamp: "asc" }
     });
@@ -92,6 +95,11 @@ router.get("/:id/readings", async (req, res, next) => {
 router.post("/", authenticate, requireRole("admin", "field_agent"), async (req, res, next) => {
   try {
     const input = sourceSchema.parse(req.body);
+    const district = await prisma.district.findFirst({
+      where: { id: input.districtId, ...(req.user.tenantId ? { tenantId: req.user.tenantId } : {}) },
+      select: { id: true }
+    });
+    if (!district) return res.status(404).json({ error: "District not found" });
     const [source] = await prisma.$queryRaw`
       INSERT INTO "WaterSource" (id, name, type, location, "districtId", status, depth, yield, "lastInspected", "createdAt")
       VALUES (gen_random_uuid(), ${input.name}, ${input.type}::"WaterSourceType",
@@ -109,6 +117,11 @@ router.post("/", authenticate, requireRole("admin", "field_agent"), async (req, 
 router.post("/:id/reading", authenticate, requireRole("admin", "field_agent"), async (req, res, next) => {
   try {
     const input = readingSchema.parse(req.body);
+    const source = await prisma.waterSource.findFirst({
+      where: { id: req.params.id, district: req.user.tenantId ? { tenantId: req.user.tenantId } : {} },
+      select: { id: true }
+    });
+    if (!source) return res.status(404).json({ error: "Water source not found" });
     const reading = await prisma.waterSourceReading.create({
       data: {
         sourceId: req.params.id,

@@ -15,6 +15,9 @@ ndviRouter.get("/:districtId", async (req, res, next) => {
       FROM "NDVIReading"
       WHERE "districtId" = ${req.params.districtId}::uuid
         AND "capturedAt" >= ${start}
+        AND (${req.tenantId || null}::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM "District" d WHERE d.id = "NDVIReading"."districtId" AND d."tenantId" = ${req.tenantId || null}::uuid
+        ))
       GROUP BY 1
       ORDER BY 1 ASC
     `;
@@ -28,7 +31,11 @@ rainfallRouter.get("/:districtId", async (req, res, next) => {
   try {
     const months = requestedMonths(req.query.months);
     const rows = await prisma.rainfallRecord.findMany({
-      where: { districtId: req.params.districtId, month: { in: monthsBack(months) } },
+      where: {
+        districtId: req.params.districtId,
+        month: { in: monthsBack(months) },
+        district: req.tenantId ? { tenantId: req.tenantId } : {}
+      },
       orderBy: { month: "asc" }
     });
     res.json(fillSeries(rows, months, "mmTotal", 0));
@@ -48,6 +55,9 @@ groundwaterRouter.get("/:districtId", async (req, res, next) => {
       JOIN "WaterSource" ws ON ws.id = wsr."sourceId"
       WHERE ws."districtId" = ${req.params.districtId}::uuid
         AND wsr.timestamp >= ${new Date(`${start}T00:00:00.000Z`)}
+        AND (${req.tenantId || null}::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM "District" d WHERE d.id = ws."districtId" AND d."tenantId" = ${req.tenantId || null}::uuid
+        ))
       GROUP BY 1
       ORDER BY 1 ASC
     `;
