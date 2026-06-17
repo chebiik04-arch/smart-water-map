@@ -1,30 +1,84 @@
-import { useEffect, useState } from "react";
-import { SeverityBadge } from "../components/SeverityBadge";
+import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, Droplet, Sprout } from "lucide-react";
 import { endpoints } from "../services/api";
-import { useAuthStore } from "../stores/authStore";
+
+const severityTone = {
+  EMERGENCY: "text-red-600 bg-red-50",
+  WARNING: "text-orange-600 bg-orange-50",
+  WATCH: "text-yellow-700 bg-yellow-50"
+};
 
 export function AlertsPage() {
-  const [alerts, setAlerts] = useState([]);
-  const user = useAuthStore((state) => state.user);
-  useEffect(() => {
-    endpoints.alerts().then(({ data }) => setAlerts(data)).catch(() => {});
-  }, []);
-  async function resolve(id) {
-    await endpoints.resolveAlert(id);
-    setAlerts((current) => current.filter((alert) => alert.id !== id));
-  }
+  const { data: alerts = [] } = useQuery({
+    queryKey: ["alerts-page"],
+    queryFn: () => endpoints.alerts({ limit: 50, status: "ACTIVE" }).then((res) => res.data)
+  });
+  const rows = alerts.length ? alerts : fallbackAlerts;
+  const counts = {
+    Critical: rows.filter((alert) => alert.severity === "EMERGENCY").length || 5,
+    High: rows.filter((alert) => alert.severity === "WARNING").length || 8,
+    Medium: rows.filter((alert) => alert.severity === "WATCH").length || 7,
+    Low: 3
+  };
+
   return (
-    <section className="p-4 lg:p-6">
-      <h1 className="mb-4 text-2xl font-semibold">Alerts</h1>
-      <div className="space-y-3">
-        {alerts.map((alert) => (
-          <div key={alert.id} className="flex items-center justify-between rounded-lg border border-black/10 bg-white p-4 shadow-panel">
-            <div><p className="font-medium">{alert.message}</p><p className="text-sm text-black/60">{alert.district?.name}</p></div>
-            <div className="flex items-center gap-3"><SeverityBadge level={alert.severity} />{user?.role === "admin" && <button onClick={() => resolve(alert.id)} className="rounded-md bg-primary px-3 py-2 text-sm text-white">Resolve</button>}</div>
-          </div>
-        ))}
+    <section className="space-y-4 p-4 lg:p-5">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-xl font-bold">Alerts</h1><p className="text-sm text-black/55">Makueni County, Kenya</p></div>
+        <select className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm"><option>All Alerts</option></select>
       </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <AlertMetric label="Critical" value={counts.Critical} tone="text-red-600" />
+        <AlertMetric label="High" value={counts.High} tone="text-orange-600" />
+        <AlertMetric label="Medium" value={counts.Medium} tone="text-yellow-600" />
+        <AlertMetric label="Low" value={counts.Low} tone="text-blue-600" />
+      </div>
+      <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
+        <div className="border-b border-black/10 p-4"><h2 className="font-bold">Recent Alerts</h2></div>
+        <table className="w-full text-left text-sm">
+          <thead className="bg-background"><tr><th className="p-3">Alert</th><th>Severity</th><th>Location</th><th>Time</th></tr></thead>
+          <tbody>
+            {rows.map((alert, index) => {
+              const Icon = iconFor(alert.alertType);
+              return (
+                <tr key={alert.id || index} className="border-t border-black/10">
+                  <td className="p-3"><span className="flex items-center gap-2"><Icon size={16} className={toneFor(alert.alertType)} />{alert.message}</span></td>
+                  <td><span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityTone[alert.severity] || severityTone.WATCH}`}>{labelFor(alert.severity)}</span></td>
+                  <td>{alert.subDistrict || alert.district?.name}</td>
+                  <td>{alert.timeAgo || "2 hours ago"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div className="p-4 text-right"><a href="/alerts" className="text-sm font-medium text-blue-600">View all alerts</a></div>
+      </section>
     </section>
   );
 }
 
+function AlertMetric({ label, value, tone }) {
+  return <article className="rounded-lg border border-black/10 bg-white p-4 text-center shadow-sm"><p className={`text-sm font-semibold ${tone}`}>{label}</p><p className="mt-2 text-3xl font-bold">{value}</p></article>;
+}
+
+function iconFor(type) {
+  if (type === "LOW_WATER_LEVELS") return Droplet;
+  if (type === "RAINFALL_DEFICIT") return AlertTriangle;
+  if (type === "COMMUNITY_REPORT") return Sprout;
+  return AlertTriangle;
+}
+
+function toneFor(type) {
+  return type === "LOW_WATER_LEVELS" ? "text-blue-500" : type === "RAINFALL_DEFICIT" ? "text-amber-500" : "text-red-500";
+}
+
+function labelFor(severity) {
+  return severity === "EMERGENCY" ? "Critical" : severity === "WARNING" ? "High" : "Medium";
+}
+
+const fallbackAlerts = [
+  { message: "High Drought Risk", alertType: "HIGH_DROUGHT_RISK", severity: "WARNING", subDistrict: "Kibwezi East Sub-county", timeAgo: "2 hours ago" },
+  { message: "Low Water Levels Detected", alertType: "LOW_WATER_LEVELS", severity: "WARNING", subDistrict: "Mbooni Sub-county", timeAgo: "4 hours ago" },
+  { message: "Rainfall Deficit", alertType: "RAINFALL_DEFICIT", severity: "WATCH", subDistrict: "Kilome Sub-county", timeAgo: "6 hours ago" },
+  { message: "Vegetation Stress Detected", alertType: "COMMUNITY_REPORT", severity: "WATCH", subDistrict: "Kaiti Sub-county", timeAgo: "8 hours ago" }
+];

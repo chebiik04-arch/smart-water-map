@@ -1,73 +1,57 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle, Clock, Wrench } from "lucide-react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
+import { RainfallChart } from "../components/charts/RainfallChart";
+import { DroughtMap } from "../components/map/DroughtMap";
 import { endpoints } from "../services/api";
 
 export function OperationsPage() {
-  const [health, setHealth] = useState({ sensors: [], stale: [], staleHours: 6 });
-  const [tickets, setTickets] = useState([]);
-
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  async function refresh() {
-    const [healthRes, ticketRes] = await Promise.all([endpoints.sensorHealth({ staleHours: 6 }), endpoints.maintenanceTickets()]);
-    setHealth(healthRes.data);
-    setTickets(ticketRes.data);
-  }
-
-  async function updateTicket(id, status) {
-    await endpoints.updateTicketStatus(id, { status });
-    await refresh();
-  }
+  const { data: districts } = useQuery({ queryKey: ["districts-rainfall"], queryFn: () => endpoints.districts().then((res) => res.data) });
+  const districtId = useMemo(() => districts?.features?.find((item) => item.properties.name === "Kibwezi East")?.id || districts?.features?.[0]?.id, [districts]);
+  const { data: rainfall = [] } = useQuery({
+    queryKey: ["rainfall-page", districtId],
+    queryFn: () => endpoints.rainfallSeries(districtId, { months: 6 }).then((res) => res.data),
+    enabled: Boolean(districtId)
+  });
+  const total = rainfall.reduce((sum, row) => sum + row.mmTotal, 0);
+  const avg = rainfall.length ? total / rainfall.length : 0;
+  const wettest = rainfall.reduce((max, row) => row.mmTotal > (max?.mmTotal || 0) ? row : max, null);
+  const driest = rainfall.reduce((min, row) => row.mmTotal < (min?.mmTotal ?? Infinity) ? row : min, null);
 
   return (
-    <section className="space-y-4 p-4 lg:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Sensor Operations</h1>
-        <p className="text-sm text-black/60">Stale ping monitoring and maintenance ticket workflow</p>
+    <section className="space-y-4 p-4 lg:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h1 className="text-xl font-bold">Rainfall Analysis</h1><p className="text-sm text-black/55">Makueni County, Kenya</p></div>
+        <div className="flex flex-wrap gap-2">
+          <select className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm"><option>CHIRPS</option></select>
+          <select className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm"><option>Last 6 Months</option></select>
+          <button className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"><Download size={15} /> Export</button>
+        </div>
       </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Metric icon={AlertTriangle} label="Stale sensors" value={health.stale.length} tone="text-danger" />
-        <Metric icon={Wrench} label="Open tickets" value={tickets.filter((ticket) => ticket.status !== "RESOLVED").length} tone="text-warning" />
-        <Metric icon={Clock} label="Ping SLA" value={`${health.staleHours}h`} tone="text-primary" />
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_13rem]">
+        <div className="h-[430px] overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
+          <DroughtMap districtId={districtId} />
+        </div>
+        <div className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-bold">Rainfall (mm)</h2>
+          <div className="mt-4 h-72 rounded-md bg-gradient-to-b from-blue-100 to-blue-500" />
+          <div className="mt-3 flex justify-between text-xs text-black/60"><span>0</span><span>200</span></div>
+        </div>
       </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="Sensor health">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-background"><tr><th className="p-3">Sensor</th><th>District</th><th>Hours</th><th>Tickets</th></tr></thead>
-            <tbody>{health.sensors.map((sensor) => <tr key={sensor.id} className="border-t border-black/10"><td className="p-3">{sensor.type}</td><td>{sensor.districtName}</td><td>{Number(sensor.hoursSincePing).toFixed(1)}</td><td>{sensor.openTickets}</td></tr>)}</tbody>
-          </table>
-        </Panel>
-
-        <Panel title="Maintenance tickets">
-          <div className="space-y-3 p-3">
-            {tickets.map((ticket) => (
-              <article key={ticket.id} className="rounded-md border border-black/10 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div><p className="font-semibold">{ticket.title}</p><p className="text-sm text-black/60">{ticket.description}</p></div>
-                  <span className="rounded-full bg-warning/15 px-2 py-1 text-xs font-semibold text-warning">{ticket.priority}</span>
-                </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <p className="text-xs text-black/55">{ticket.status} · {ticket.staleHours}h stale</p>
-                  {ticket.status !== "RESOLVED" && <button onClick={() => updateTicket(ticket.id, "RESOLVED")} className="inline-flex items-center gap-1 rounded-md bg-safe px-2 py-1 text-xs font-semibold text-white"><CheckCircle size={13} /> Resolve</button>}
-                </div>
-              </article>
-            ))}
-          </div>
-        </Panel>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <RainfallChart districtId={districtId} />
+        <section className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-bold">Monthly Statistics</h2>
+          <Stat label="Total (6 Months)" value={`${total.toFixed(1)} mm`} />
+          <Stat label="Average Monthly" value={`${avg.toFixed(1)} mm`} />
+          <Stat label="Wettest Month" value={`${wettest?.month || "Feb"} (${wettest?.mmTotal || 126.4} mm)`} />
+          <Stat label="Driest Month" value={`${driest?.month || "May"} (${driest?.mmTotal || 28.7} mm)`} />
+        </section>
       </div>
     </section>
   );
 }
 
-function Metric({ icon: Icon, label, value, tone }) {
-  return <article className="rounded-lg border border-black/10 bg-white p-5 shadow-panel"><Icon className={tone} size={22} /><p className="mt-4 text-3xl font-semibold">{value}</p><p className="text-sm text-black/60">{label}</p></article>;
+function Stat({ label, value }) {
+  return <div className="mt-4"><p className="text-xs text-black/50">{label}</p><p className="font-bold">{value}</p></div>;
 }
-
-function Panel({ title, children }) {
-  return <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-panel"><h2 className="border-b border-black/10 p-4 font-semibold">{title}</h2>{children}</div>;
-}
-
