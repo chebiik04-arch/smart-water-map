@@ -11,6 +11,7 @@ import mapLayerRoutes from "./mapLayers.js";
 import developerRoutes from "./developer.js";
 import publicApiRoutes from "./publicApi.js";
 import simulationRoutes from "./simulations.js";
+import advisoryRoutes from "./advisory.js";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use("/map-layers", mapLayerRoutes);
 router.use("/developer", developerRoutes);
 router.use("/public", publicApiRoutes);
 router.use("/simulations", simulationRoutes);
+router.use("/advisory", advisoryRoutes);
 
 export default router;

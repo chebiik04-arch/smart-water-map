@@ -13,6 +13,7 @@ import { AdminUsersPage } from "../pages/AdminUsersPage";
 import { OperationsPage } from "../pages/OperationsPage";
 import { SimulationsPage } from "../pages/SimulationsPage";
 import { DeveloperPortalPage } from "../pages/DeveloperPortalPage";
+import { AdvisoryPage } from "../pages/AdvisoryPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
           { path: "/alerts", element: <AlertsPage /> },
           { path: "/reports", element: <ReportsPage /> },
           { path: "/forecasts", element: <ForecastsPage /> },
+          { path: "/advisory", element: <AdvisoryPage /> },
           { path: "/simulations", element: <SimulationsPage /> }
         ]
       }

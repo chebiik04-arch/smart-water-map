@@ -49,5 +49,10 @@ export const endpoints = {
   developerPortal: () => api.get("/developer/portal"),
   apiKeys: () => api.get("/developer/api-keys"),
   createApiKey: (payload) => api.post("/developer/api-keys", payload),
-  apiUsage: () => api.get("/developer/usage")
+  apiUsage: () => api.get("/developer/usage"),
+  createIrrigationSchedule: (payload) => api.post("/advisory/irrigation/schedule", payload),
+  irrigationSchedules: () => api.get("/advisory/irrigation/schedules"),
+  cropRecommendations: (districtId) => api.get(`/advisory/crops/recommendations/${districtId}`),
+  marketPrices: () => api.get("/advisory/market/prices"),
+  livestockWaterStress: () => api.get("/advisory/livestock/water-stress")
 };

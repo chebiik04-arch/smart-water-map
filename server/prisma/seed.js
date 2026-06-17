@@ -2,6 +2,8 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { generateApiKey, hashApiKey, keyPrefix } from "../src/utils/apiKeys.js";
+import { buildIrrigationAdvice } from "../src/services/irrigationAdvisor.js";
+import { marketDecisionHint } from "../src/services/marketPrices.js";
 
 const prisma = new PrismaClient();
 
@@ -91,6 +93,9 @@ async function main() {
   await seedBoreholes();
   await seedConflictRiskAreas();
   await seedHydroEvents();
+  await seedCropVarieties(tenant.id);
+  await seedMarketPrices(tenant.id);
+  await seedLivestockLayers();
 
   const sensors = [];
   for (let i = 0; i < 10; i += 1) {
@@ -163,6 +168,8 @@ async function main() {
     });
   }
 
+  await seedIrrigationSchedule(districts[1].id);
+
   const warningDistrict = districts[0];
   await prisma.droughtAlert.create({
     data: {
@@ -206,6 +213,12 @@ async function clearData() {
   await prisma.apiKey.deleteMany();
   await prisma.digitalTwinSimulation.deleteMany();
   await prisma.maintenanceTicket.deleteMany();
+  await prisma.irrigationSchedule.deleteMany();
+  await prisma.cropRecommendation.deleteMany();
+  await prisma.cropVariety.deleteMany();
+  await prisma.marketPrice.deleteMany();
+  await prisma.$executeRaw`DELETE FROM "LivestockWaterPoint"`;
+  await prisma.pastureCondition.deleteMany();
   await prisma.sensorReading.deleteMany();
   await prisma.satelliteIndex.deleteMany();
   await prisma.droughtForecast.deleteMany();
@@ -219,6 +232,84 @@ async function clearData() {
   await prisma.$executeRaw`DELETE FROM "District"`;
   await prisma.user.deleteMany();
   await prisma.tenant.deleteMany();
+}
+
+async function seedCropVarieties(tenantId) {
+  await prisma.cropVariety.createMany({
+    data: [
+      { tenantId, cropName: "Sorghum", varietyName: "Seredo", season: "Short rains", waterDemand: "LOW", droughtTolerance: 9, maturityDays: 95, notes: "Reliable in arid and semi-arid zones." },
+      { tenantId, cropName: "Pearl millet", varietyName: "KAT PM2", season: "Short rains", waterDemand: "LOW", droughtTolerance: 9, maturityDays: 80, notes: "Good option when rainfall onset is uncertain." },
+      { tenantId, cropName: "Cowpea", varietyName: "K80", season: "Short rains", waterDemand: "LOW", droughtTolerance: 8, maturityDays: 75, notes: "Dual-purpose grain and fodder crop." },
+      { tenantId, cropName: "Green gram", varietyName: "N26", season: "Short rains", waterDemand: "LOW", droughtTolerance: 8, maturityDays: 70, notes: "Fast-maturing legume for dry spells." },
+      { tenantId, cropName: "Maize", varietyName: "DH04", season: "Long rains", waterDemand: "MEDIUM", droughtTolerance: 6, maturityDays: 110, notes: "Use only where soil moisture is stable." }
+    ]
+  });
+}
+
+async function seedMarketPrices(tenantId) {
+  const prices = [
+    { commodity: "Goat", marketName: "Lodwar", unit: "head", price: 5200, trend: "FALLING", source: "seeded_market_observer" },
+    { commodity: "Cattle", marketName: "Marsabit", unit: "head", price: 31000, trend: "FALLING", source: "seeded_market_observer" },
+    { commodity: "Sorghum", marketName: "Isiolo", unit: "90kg bag", price: 4300, trend: "RISING", source: "seeded_market_observer" },
+    { commodity: "Hay", marketName: "Nanyuki", unit: "bale", price: 420, trend: "RISING", source: "seeded_market_observer" }
+  ];
+  for (const item of prices) {
+    await prisma.marketPrice.create({
+      data: {
+        tenantId,
+        currency: "KES",
+        observedAt: daysAgo(Math.floor(Math.random() * 5)),
+        decisionHint: marketDecisionHint(item),
+        ...item
+      }
+    });
+  }
+}
+
+async function seedLivestockLayers() {
+  const statuses = ["RELIABLE", "STRESSED", "DRY"];
+  for (const [districtIndex, district] of districts.entries()) {
+    for (let i = 0; i < 3; i += 1) {
+      const volume = 180000 - districtIndex * 30000 - i * 42000;
+      const demand = 22000 + i * 7000;
+      await prisma.$executeRaw`
+        INSERT INTO "LivestockWaterPoint" (id, "districtId", name, location, status, "waterVolumeLiters",
+          "dailyDemandLiters", "daysRemaining", "supportedLivestock", "lastUpdatedAt")
+        VALUES (gen_random_uuid(), ${district.id}::uuid, ${`${district.name} water point ${i + 1}`},
+          ST_SetSRID(ST_MakePoint(${district.polygon[0][0] + 0.08 + i * 0.07}, ${district.polygon[0][1] + 0.08 + i * 0.04}), 4326),
+          ${statuses[(districtIndex + i) % statuses.length]}::"WaterPointStatus",
+          ${volume}, ${demand}, ${Number((volume / demand).toFixed(1))}, ${420 + i * 180}, NOW())
+      `;
+    }
+    await prisma.pastureCondition.create({
+      data: {
+        districtId: district.id,
+        pastureIndex: Number((0.28 + districtIndex * 0.09).toFixed(2)),
+        grazingPressure: Number((0.72 - districtIndex * 0.08).toFixed(2)),
+        stressLevel: district.risk,
+        observedAt: daysAgo(2),
+        notes: `Pasture condition for ${district.name} reflects livestock pressure and current NDVI.`
+      }
+    });
+  }
+}
+
+async function seedIrrigationSchedule(districtId) {
+  const advice = buildIrrigationAdvice({
+    cropName: "Sorghum",
+    soilMoisturePercent: 31,
+    evapotranspirationMmDay: 4.8,
+    rainfallForecastMm: 2
+  });
+  await prisma.irrigationSchedule.create({
+    data: {
+      districtId,
+      cropName: "Sorghum",
+      soilMoisturePercent: 31,
+      evapotranspirationMmDay: 4.8,
+      ...advice
+    }
+  });
 }
 
 async function seedDroughtSnapshots() {

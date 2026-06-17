@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Bell, Binary, Gauge, KeyRound, Layers, LogOut, Map, RadioTower, Users, FileText, CloudSun, Wrench } from "lucide-react";
+import { Bell, Binary, Gauge, KeyRound, Layers, LogOut, Map, RadioTower, Sprout, Users, FileText, CloudSun, Wrench } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { useLanguageStore } from "../stores/languageStore";
 import { languages } from "../i18n/translations";
@@ -12,6 +12,7 @@ const links = [
   { to: "/alerts", label: "Alerts", icon: Bell },
   { to: "/reports", label: "Reports", icon: FileText },
   { to: "/forecasts", label: "Forecasts", icon: CloudSun },
+  { to: "/advisory", label: "Farmer Advisory", icon: Sprout },
   { to: "/simulations", label: "Digital Twin", icon: Binary },
   { to: "/developers", label: "Developer API", icon: KeyRound, admin: true },
   { to: "/admin/users", label: "Users", icon: Users, admin: true }

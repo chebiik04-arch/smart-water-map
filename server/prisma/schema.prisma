@@ -92,6 +92,25 @@ enum ApiKeyStatus {
   REVOKED
 }
 
+enum CropWaterDemand {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum MarketTrend {
+  RISING
+  STABLE
+  FALLING
+}
+
+enum WaterPointStatus {
+  RELIABLE
+  STRESSED
+  DRY
+  CONTAMINATED
+}
+
 model Tenant {
   id          String    @id @default(uuid()) @db.Uuid
   name        String
@@ -102,6 +121,8 @@ model Tenant {
   districts   District[]
   apiKeys     ApiKey[]
   simulations DigitalTwinSimulation[]
+  cropVarieties CropVariety[]
+  marketPrices MarketPrice[]
 }
 
 model User {
@@ -138,9 +159,107 @@ model District {
   droughtSnapshots  DroughtSnapshot[]
   boreholes         Borehole[]
   hydroEvents       HydroEvent[]
+  irrigationSchedules IrrigationSchedule[]
+  cropRecommendations CropRecommendation[]
+  livestockWaterPoints LivestockWaterPoint[]
+  pastureConditions PastureCondition[]
 
   @@index([tenantId])
   @@index([droughtRiskLevel])
+}
+
+model IrrigationSchedule {
+  id                     String   @id @default(uuid()) @db.Uuid
+  districtId             String   @db.Uuid
+  district               District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  cropName               String
+  soilMoisturePercent    Float
+  evapotranspirationMmDay Float
+  recommendedDate        DateTime
+  waterMm                Float
+  litersPerHectare       Float
+  priority               AlertSeverity
+  rationale              String
+  createdAt              DateTime @default(now())
+
+  @@index([districtId, recommendedDate])
+}
+
+model CropVariety {
+  id                 String          @id @default(uuid()) @db.Uuid
+  tenantId           String?         @db.Uuid
+  tenant             Tenant?         @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  cropName           String
+  varietyName        String
+  season             String
+  waterDemand        CropWaterDemand
+  droughtTolerance   Int
+  maturityDays       Int
+  notes              String
+  recommendations    CropRecommendation[]
+
+  @@index([tenantId, cropName])
+  @@index([waterDemand, droughtTolerance])
+}
+
+model CropRecommendation {
+  id              String       @id @default(uuid()) @db.Uuid
+  districtId      String       @db.Uuid
+  district        District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  cropVarietyId   String       @db.Uuid
+  cropVariety     CropVariety  @relation(fields: [cropVarietyId], references: [id], onDelete: Cascade)
+  score           Float
+  rationale       String
+  season          String
+  createdAt       DateTime     @default(now())
+
+  @@index([districtId, score])
+}
+
+model MarketPrice {
+  id             String      @id @default(uuid()) @db.Uuid
+  tenantId       String?     @db.Uuid
+  tenant         Tenant?     @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  commodity      String
+  marketName     String
+  unit           String
+  price          Float
+  currency       String      @default("KES")
+  observedAt     DateTime
+  trend          MarketTrend @default(STABLE)
+  source         String
+  decisionHint   String
+
+  @@index([tenantId, commodity, observedAt])
+}
+
+model LivestockWaterPoint {
+  id                  String           @id @default(uuid()) @db.Uuid
+  districtId          String           @db.Uuid
+  district            District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  name                String
+  location            Unsupported("geometry(Point, 4326)")
+  status              WaterPointStatus
+  waterVolumeLiters   Float
+  dailyDemandLiters   Float
+  daysRemaining       Float
+  supportedLivestock  Int
+  lastUpdatedAt       DateTime         @default(now())
+
+  @@index([districtId, status])
+}
+
+model PastureCondition {
+  id                String           @id @default(uuid()) @db.Uuid
+  districtId        String           @db.Uuid
+  district          District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  pastureIndex      Float
+  grazingPressure   Float
+  stressLevel       DroughtRiskLevel
+  observedAt        DateTime
+  notes             String
+
+  @@index([districtId, observedAt])
 }
 
 model DroughtSnapshot {

@@ -54,6 +54,7 @@ export function DroughtMap() {
   const [boreholes, setBoreholes] = useState([]);
   const [conflictRisks, setConflictRisks] = useState(null);
   const [hydroEvents, setHydroEvents] = useState(null);
+  const [livestockStress, setLivestockStress] = useState({ waterPoints: [], pasture: [] });
   const [liveUpdates, setLiveUpdates] = useState([]);
   const [weekIndex, setWeekIndex] = useState(0);
 
@@ -66,8 +67,9 @@ export function DroughtMap() {
       endpoints.droughtTimeline(),
       endpoints.boreholes(),
       endpoints.conflictRisks(),
-      endpoints.hydroEvents()
-    ]).then(([districtRes, sensorRes, alertRes, reportRes, timelineRes, boreholeRes, conflictRes, hydroRes]) => {
+      endpoints.hydroEvents(),
+      endpoints.livestockWaterStress()
+    ]).then(([districtRes, sensorRes, alertRes, reportRes, timelineRes, boreholeRes, conflictRes, hydroRes, livestockRes]) => {
       setDistricts(districtRes.data);
       setSensors(sensorRes.data);
       setAlerts(alertRes.data);
@@ -76,6 +78,7 @@ export function DroughtMap() {
       setBoreholes(boreholeRes.data);
       setConflictRisks(conflictRes.data);
       setHydroEvents(hydroRes.data);
+      setLivestockStress(livestockRes.data);
       setWeekIndex(Math.max(0, uniqueWeeks(timelineRes.data).length - 1));
     }).catch(() => {});
   }, []);
@@ -227,6 +230,24 @@ export function DroughtMap() {
               />
             )}
           </Overlay>
+          <Overlay name="Livestock water stress">
+            <>
+              {livestockStress.waterPoints.map((point) => {
+                const pos = geoJsonPointToLatLng(point.location);
+                if (!pos) return null;
+                return (
+                  <CircleMarker key={point.id} center={pos} radius={point.status === "DRY" ? 11 : 8} pathOptions={{ color: livestockColor(point.status), fillColor: livestockColor(point.status), fillOpacity: 0.78 }}>
+                    <Popup>
+                      <strong>{point.name}</strong>
+                      <p>Status: {point.status}</p>
+                      <p>{Number(point.daysRemaining).toFixed(1)} days remaining</p>
+                      <p>{point.supportedLivestock} livestock supported</p>
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
+            </>
+          </Overlay>
 
           {districts?.features?.map((feature) => {
             const alertsForDistrict = alertsByDistrict[feature.id] || [];
@@ -364,4 +385,8 @@ function approximatePolygonCenter(geometry) {
   if (!ring?.length) return null;
   const sums = ring.reduce((acc, [lng, lat]) => ({ lat: acc.lat + lat, lng: acc.lng + lng }), { lat: 0, lng: 0 });
   return [sums.lat / ring.length, sums.lng / ring.length];
+}
+
+function livestockColor(status) {
+  return { RELIABLE: "#27AE60", STRESSED: "#E07B00", DRY: "#C0392B", CONTAMINATED: "#7C3AED" }[status] || "#E07B00";
 }

@@ -93,6 +93,7 @@ smart-water-map/
 - Advanced GIS: drought timelapse, borehole infrastructure, conflict-risk overlays, flood/drought event layers, and Three.js groundwater terrain.
 - Field collection: offline-first PWA reporting, compressed photo evidence with GPS tagging, multilingual UI, IVR/WhatsApp intake stubs, and contributor points.
 - Platform operations: stale-sensor health monitoring, maintenance tickets, digital twin rainfall stress simulations, researcher API keys with quotas, and tenant-scoped data.
+- Farmer advisory: irrigation schedules, drought-tolerant crop recommendations, commodity market prices, and pastoral livestock water stress monitoring.
 - API versioning: all application routes live under `/api/v1`.
 
 ## Setup
@@ -224,6 +225,12 @@ API: `http://localhost:4000`
 - `GET /api/v1/public/districts`
 - `GET /api/v1/public/sensors`
 - `GET /api/v1/public/readings?sensorId=<uuid>`
+- `POST /api/v1/advisory/irrigation/schedule`
+- `GET /api/v1/advisory/irrigation/schedules`
+- `GET /api/v1/advisory/crops/recommendations/:districtId`
+- `GET /api/v1/advisory/market/prices`
+- `POST /api/v1/advisory/market/prices`
+- `GET /api/v1/advisory/livestock/water-stress`
 
 ## GIS Intelligence Layers
 
@@ -248,6 +255,13 @@ API: `http://localhost:4000`
 - Digital twin: planners can simulate groundwater impact from rainfall drops, such as a 30% drop over 6 weeks.
 - Developer API: admin-issued API keys give researchers quota-limited access to public district, sensor, and reading data.
 - Multi-tenancy: tenants isolate users, districts, API keys, public API scope, simulations, and operational views for country/NGO deployments.
+
+## Farmer Advisory
+
+- Irrigation scheduling assistant: combines recent soil-moisture readings and ET satellite index data to recommend when and how much to irrigate.
+- Crop recommender: ranks drought-tolerant varieties by district risk, NDVI, water demand, maturity, and drought tolerance.
+- Market prices: stores commodity prices and supports a configurable external provider through `MARKET_PRICE_API_URL` and `MARKET_PRICE_API_KEY`.
+- Livestock water stress: tracks pastoral water points, days of water remaining, livestock supported, and pasture condition by district.
 
 ## Socket.io Events
 
