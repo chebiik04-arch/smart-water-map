@@ -1,7 +1,7 @@
 import { Bell, ChevronDown, Mail, Menu } from "lucide-react";
 
-export function TopBar({ title = "Dashboard", subtitle = "Makueni County, Kenya", user }) {
-  const name = user?.name || "Jane Mutua";
+export function TopBar({ title = "Dashboard", subtitle = "Selected area", user }) {
+  const name = user?.name || user?.email || "User";
   const role = user?.role ? user.role.replace("_", " ") : "County Officer";
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-black/10 bg-white px-4 shadow-sm">

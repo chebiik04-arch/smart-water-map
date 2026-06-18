@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CloudRain, Droplet } from "lucide-react";
 import { endpoints } from "../../services/api";
 import { createSocket } from "../../services/socket";
+import { asArray } from "../../utils/apiData";
 
 const alertConfig = {
   HIGH_DROUGHT_RISK: { icon: AlertTriangle, tone: "text-red-500" },
@@ -13,13 +14,13 @@ const alertConfig = {
 };
 
 export function AlertsPanel({ districtId, limit = 5 }) {
-  const { data = [] } = useQuery({
+  const { data } = useQuery({
     queryKey: ["alerts-feed", districtId, limit],
     queryFn: () => endpoints.alerts({ districtId, limit, status: "ACTIVE" }).then((res) => res.data)
   });
   const [items, setItems] = useState([]);
 
-  useEffect(() => setItems(data), [data]);
+  useEffect(() => setItems(asArray(data)), [data]);
   useEffect(() => {
     const socket = createSocket();
     socket.on("alert:new", (alert) => setItems((current) => [alert, ...current].slice(0, limit)));
@@ -43,10 +44,11 @@ export function AlertsPanel({ districtId, limit = 5 }) {
                 <p className={`truncate text-sm font-semibold ${config.tone}`}>{alert.message}</p>
                 <p className="truncate text-xs text-black/55">{alert.subDistrict || alert.district?.name}</p>
               </div>
-              <p className="text-[11px] text-black/45">{alert.timeAgo || "now"}</p>
+              <p className="text-[11px] text-black/45">{alert.triggeredAt ? new Date(alert.triggeredAt).toLocaleTimeString() : "-"}</p>
             </div>
           );
         })}
+        {!items.length && <p className="px-4 py-6 text-sm text-black/50">No active alerts returned by the backend.</p>}
       </div>
     </section>
   );

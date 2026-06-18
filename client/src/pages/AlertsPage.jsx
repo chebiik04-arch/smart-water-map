@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Droplet, Sprout } from "lucide-react";
 import { endpoints } from "../services/api";
+import { asArray } from "../utils/apiData";
 
 const severityTone = {
   EMERGENCY: "text-red-600 bg-red-50",
@@ -9,22 +10,24 @@ const severityTone = {
 };
 
 export function AlertsPage() {
-  const { data: alerts = [] } = useQuery({
+  const { data } = useQuery({
     queryKey: ["alerts-page"],
     queryFn: () => endpoints.alerts({ limit: 50, status: "ACTIVE" }).then((res) => res.data)
   });
-  const rows = alerts.length ? alerts : fallbackAlerts;
+  const { data: districts } = useQuery({ queryKey: ["alerts-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
+  const rows = asArray(data);
+  const districtName = districts?.features?.[0]?.properties?.name || "Selected area";
   const counts = {
-    Critical: rows.filter((alert) => alert.severity === "EMERGENCY").length || 5,
-    High: rows.filter((alert) => alert.severity === "WARNING").length || 8,
-    Medium: rows.filter((alert) => alert.severity === "WATCH").length || 7,
-    Low: 3
+    Critical: rows.filter((alert) => alert.severity === "EMERGENCY").length,
+    High: rows.filter((alert) => alert.severity === "WARNING").length,
+    Medium: rows.filter((alert) => alert.severity === "WATCH").length,
+    Low: rows.filter((alert) => alert.severity === "NORMAL" || alert.severity === "LOW").length
   };
 
   return (
     <section className="space-y-4 p-4 lg:p-5">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-xl font-bold">Alerts</h1><p className="text-sm text-black/55">Makueni County, Kenya</p></div>
+        <div><h1 className="text-xl font-bold">Alerts</h1><p className="text-sm text-black/55">{districtName}, Kenya</p></div>
         <select className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm"><option>All Alerts</option></select>
       </div>
       <div className="grid gap-3 md:grid-cols-4">
@@ -45,10 +48,11 @@ export function AlertsPage() {
                   <td className="p-3"><span className="flex items-center gap-2"><Icon size={16} className={toneFor(alert.alertType)} />{alert.message}</span></td>
                   <td><span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityTone[alert.severity] || severityTone.WATCH}`}>{labelFor(alert.severity)}</span></td>
                   <td>{alert.subDistrict || alert.district?.name}</td>
-                  <td>{alert.timeAgo || "2 hours ago"}</td>
+                  <td>{alert.triggeredAt ? new Date(alert.triggeredAt).toLocaleString() : "-"}</td>
                 </tr>
               );
             })}
+            {!rows.length && <tr><td colSpan={4} className="p-6 text-center text-sm text-black/50">No active alerts returned by the backend.</td></tr>}
           </tbody>
         </table>
         <div className="p-4 text-right"><a href="/alerts" className="text-sm font-medium text-blue-600">View all alerts</a></div>
@@ -75,10 +79,3 @@ function toneFor(type) {
 function labelFor(severity) {
   return severity === "EMERGENCY" ? "Critical" : severity === "WARNING" ? "High" : "Medium";
 }
-
-const fallbackAlerts = [
-  { message: "High Drought Risk", alertType: "HIGH_DROUGHT_RISK", severity: "WARNING", subDistrict: "Kibwezi East Sub-county", timeAgo: "2 hours ago" },
-  { message: "Low Water Levels Detected", alertType: "LOW_WATER_LEVELS", severity: "WARNING", subDistrict: "Mbooni Sub-county", timeAgo: "4 hours ago" },
-  { message: "Rainfall Deficit", alertType: "RAINFALL_DEFICIT", severity: "WATCH", subDistrict: "Kilome Sub-county", timeAgo: "6 hours ago" },
-  { message: "Vegetation Stress Detected", alertType: "COMMUNITY_REPORT", severity: "WATCH", subDistrict: "Kaiti Sub-county", timeAgo: "8 hours ago" }
-];

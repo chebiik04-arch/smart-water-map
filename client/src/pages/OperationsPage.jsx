@@ -4,15 +4,18 @@ import { Download } from "lucide-react";
 import { RainfallChart } from "../components/charts/RainfallChart";
 import { DroughtMap } from "../components/map/DroughtMap";
 import { endpoints } from "../services/api";
+import { asArray } from "../utils/apiData";
 
 export function OperationsPage() {
   const { data: districts } = useQuery({ queryKey: ["districts-rainfall"], queryFn: () => endpoints.districts().then((res) => res.data) });
-  const districtId = useMemo(() => districts?.features?.find((item) => item.properties.name === "Kibwezi East")?.id || districts?.features?.[0]?.id, [districts]);
-  const { data: rainfall = [] } = useQuery({
+  const districtId = useMemo(() => districts?.features?.[0]?.id, [districts]);
+  const { data } = useQuery({
     queryKey: ["rainfall-page", districtId],
     queryFn: () => endpoints.rainfallSeries(districtId, { months: 6 }).then((res) => res.data),
     enabled: Boolean(districtId)
   });
+  const rainfall = asArray(data);
+  const districtName = districts?.features?.find((item) => item.id === districtId)?.properties?.name || "Selected district";
   const total = rainfall.reduce((sum, row) => sum + row.mmTotal, 0);
   const avg = rainfall.length ? total / rainfall.length : 0;
   const wettest = rainfall.reduce((max, row) => row.mmTotal > (max?.mmTotal || 0) ? row : max, null);
@@ -21,7 +24,7 @@ export function OperationsPage() {
   return (
     <section className="space-y-4 p-4 lg:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-xl font-bold">Rainfall Analysis</h1><p className="text-sm text-black/55">Makueni County, Kenya</p></div>
+        <div><h1 className="text-xl font-bold">Rainfall Analysis</h1><p className="text-sm text-black/55">{districtName}, Kenya</p></div>
         <div className="flex flex-wrap gap-2">
           <select className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm"><option>CHIRPS</option></select>
           <select className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm"><option>Last 6 Months</option></select>
@@ -44,8 +47,8 @@ export function OperationsPage() {
           <h2 className="text-sm font-bold">Monthly Statistics</h2>
           <Stat label="Total (6 Months)" value={`${total.toFixed(1)} mm`} />
           <Stat label="Average Monthly" value={`${avg.toFixed(1)} mm`} />
-          <Stat label="Wettest Month" value={`${wettest?.month || "Feb"} (${wettest?.mmTotal || 126.4} mm)`} />
-          <Stat label="Driest Month" value={`${driest?.month || "May"} (${driest?.mmTotal || 28.7} mm)`} />
+          <Stat label="Wettest Month" value={wettest ? `${wettest.month} (${wettest.mmTotal} mm)` : "-"} />
+          <Stat label="Driest Month" value={driest ? `${driest.month} (${driest.mmTotal} mm)` : "-"} />
         </section>
       </div>
     </section>

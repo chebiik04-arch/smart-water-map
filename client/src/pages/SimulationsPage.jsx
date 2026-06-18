@@ -4,6 +4,7 @@ import { Activity, CalendarDays, CloudRain, RefreshCw, TrendingDown } from "luci
 import { DroughtForecastGauge } from "../components/charts/DroughtForecastGauge";
 import { DroughtMap } from "../components/map/DroughtMap";
 import { endpoints } from "../services/api";
+import { asArray } from "../utils/apiData";
 
 export function SimulationsPage() {
   const [districts, setDistricts] = useState([]);
@@ -22,11 +23,12 @@ export function SimulationsPage() {
     });
   }, []);
 
-  const probability = Math.round((forecast?.riskScore || 0.78) * 100);
-  const districtOptions = districts.length ? districts : [{ id: "makueni-county", name: "Makueni County" }];
+  const probability = Math.round((forecast?.riskScore || 0) * 100);
+  const districtOptions = districts.length ? districts : [{ id: "", name: "No districts returned" }];
   const selectedDistrictId = form.districtId || districtOptions[0].id;
-  const selectedDistrict = districtOptions.find((district) => district.id === selectedDistrictId)?.name || "Makueni County";
-  const drivers = forecast?.drivers?.length ? forecast.drivers : fallbackDrivers;
+  const selectedDistrict = districtOptions.find((district) => district.id === selectedDistrictId)?.name || "Selected district";
+  const drivers = asArray(forecast?.drivers);
+  const riskLabel = forecast?.riskLabel || "Unavailable";
 
   return (
     <section className="space-y-4 bg-[#F5F6F4] p-4 text-[#17201d] lg:p-5">
@@ -45,8 +47,8 @@ export function SimulationsPage() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <ForecastMetric title="Drought Probability" value={`${probability}%`} subtext="High risk" icon={TrendingDown} danger />
-        <ForecastMetric title="Confidence Level" value="High" subtext="Model agreement" icon={Activity} />
+        <ForecastMetric title="Drought Probability" value={`${probability}%`} subtext={riskLabel} icon={TrendingDown} danger />
+        <ForecastMetric title="Confidence Level" value={forecast?.confidenceScore ? `${Math.round(forecast.confidenceScore * 100)}%` : "-"} subtext="Model agreement" icon={Activity} />
         <ForecastMetric title="Forecast Period" value="30 days" subtext="Rolling outlook" icon={CalendarDays} />
         <ForecastMetric title="Rainfall Scenario" value={`${form.rainfallDropPercent}%`} subtext={`${form.durationWeeks} week stress test`} icon={CloudRain} warning />
       </div>
@@ -57,10 +59,10 @@ export function SimulationsPage() {
           <h2 className="text-sm font-bold">Forecast Summary</h2>
           <div className="mt-4 space-y-4 text-sm">
             <Summary label="Probability" value={`${probability}%`} />
-            <Summary label="Confidence Level" value="High" />
+            <Summary label="Confidence Level" value={forecast?.confidenceScore ? `${Math.round(forecast.confidenceScore * 100)}%` : "-"} />
             <Summary label="Forecast Period" value="Next 30 Days" />
-            <Summary label="Start Date" value="20 May 2024" />
-            <Summary label="End Date" value="19 Jun 2024" />
+            <Summary label="Forecast Date" value={forecast?.forecastDate ? new Date(forecast.forecastDate).toLocaleDateString() : "-"} />
+            <Summary label="Model Version" value={forecast?.modelVersion || "-"} />
           </div>
         </section>
       </div>
@@ -68,12 +70,12 @@ export function SimulationsPage() {
       <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
         <section className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-bold">Drivers</h2>
-          {drivers.map((driver) => (
+          {drivers.length ? drivers.map((driver) => (
             <div key={driver.factor} className="mt-3 rounded-md bg-background p-3 text-sm">
               <p className="font-semibold">{driver.factor}</p>
-              <p className="text-xs capitalize text-black/55">{driver.impact.toLowerCase()} impact</p>
+              <p className="text-xs capitalize text-black/55">{driver.impact?.toLowerCase?.() || "-"} impact</p>
             </div>
-          ))}
+          )) : <p className="mt-3 text-sm text-black/50">No forecast drivers returned by the backend.</p>}
         </section>
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-black/10 px-4 py-3">
@@ -81,7 +83,7 @@ export function SimulationsPage() {
               <h2 className="text-sm font-bold">Forecast Map</h2>
               <p className="text-xs text-black/55">Drought risk spread across the selected area of interest</p>
             </div>
-            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">High Risk</span>
+            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">{riskLabel}</span>
           </div>
           <div className="h-[390px]">
             <DroughtMap districtId={form.districtId} allLayers />
@@ -92,13 +94,6 @@ export function SimulationsPage() {
     </section>
   );
 }
-
-const fallbackDrivers = [
-  { factor: "Rainfall Deficit", impact: "HIGH" },
-  { factor: "Temperature Anomaly", impact: "HIGH" },
-  { factor: "Vegetation Health", impact: "MEDIUM" },
-  { factor: "Soil Moisture", impact: "MEDIUM" }
-];
 
 function ForecastMetric({ title, value, subtext, icon: Icon, danger = false, warning = false }) {
   const tone = danger ? "bg-red-500 text-white" : warning ? "bg-orange-100 text-orange-700" : "bg-emerald-100 text-emerald-700";

@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { endpoints } from "../services/api";
 import { useAuthStore } from "../stores/authStore";
+import { featuresToProperties } from "../utils/apiData";
 
 const statusTone = { ACTIVE: "bg-emerald-100 text-emerald-700", DRY: "bg-red-100 text-red-700", UNDER_REPAIR: "bg-amber-100 text-amber-700", ABANDONED: "bg-gray-100 text-gray-700" };
 
@@ -16,16 +17,14 @@ export function WaterSources() {
     queryFn: () => endpoints.waterSources({ type: filters.type || undefined, status: filters.status || undefined }).then((res) => res.data)
   });
   const rows = useMemo(() => {
-    const features = data?.features || [];
-    return features
-      .map((feature) => feature.properties)
-      .filter((source) => source.name.toLowerCase().includes(filters.search.toLowerCase()));
+    return featuresToProperties(data)
+      .filter((source) => (source.name || "").toLowerCase().includes(filters.search.toLowerCase()));
   }, [data, filters.search]);
   const canAdd = ["admin", "field_agent"].includes(user?.role);
   const boreholes = rows.filter((source) => source.type === "BOREHOLE").length;
   const dams = rows.filter((source) => ["RIVER", "RESERVOIR"].includes(source.type)).length;
   const waterPoints = rows.filter((source) => source.type === "WATER_POINT").length;
-  const overview = [{ name: "Boreholes", value: boreholes || 85, color: "#3B82F6" }, { name: "Water Points", value: waterPoints || 27, color: "#22C55E" }, { name: "Dams & Pans", value: dams || 12, color: "#84CC16" }];
+  const overview = [{ name: "Boreholes", value: boreholes, color: "#3B82F6" }, { name: "Water Points", value: waterPoints, color: "#22C55E" }, { name: "Dams & Pans", value: dams, color: "#84CC16" }];
 
   return (
     <section className="space-y-4 p-4 lg:p-5">
@@ -42,10 +41,10 @@ export function WaterSources() {
         {canAdd && <button className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"><Plus size={16} /> Add Water Source</button>}
       </div>
       <div className="grid gap-3 md:grid-cols-4">
-        <SummaryCard title="Total Sources" value={rows.length || 124} />
-        <SummaryCard title="Boreholes" value={boreholes || 85} />
-        <SummaryCard title="Dams & Pans" value={dams || 12} />
-        <SummaryCard title="Water Points" value={waterPoints || 27} />
+        <SummaryCard title="Total Sources" value={rows.length} />
+        <SummaryCard title="Boreholes" value={boreholes} />
+        <SummaryCard title="Dams & Pans" value={dams} />
+        <SummaryCard title="Water Points" value={waterPoints} />
       </div>
       <section className="grid gap-4 rounded-lg border border-black/10 bg-white p-4 shadow-sm xl:grid-cols-[22rem_1fr]">
         <div>
@@ -72,7 +71,8 @@ export function WaterSources() {
           <table className="w-full text-left text-sm">
             <thead className="bg-background"><tr><th className="p-3">Name</th><th>Type</th><th>Sub-county</th><th>Status</th><th>Capacity</th><th>Actions</th></tr></thead>
             <tbody>
-              {(rows.length ? rows : fallbackSources).slice(0, 6).map((source) => <tr key={source.id || source.name} className={`border-t border-black/10 ${selected?.id === source.id ? "bg-emerald-50" : ""}`} onClick={() => setSelected(source)}><td className="p-3 font-medium">{source.name}</td><td><Badge>{source.type}</Badge></td><td>{source.districtName || source.subCounty}</td><td><span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusTone[source.status] || statusTone.ACTIVE}`}>{source.status}</span></td><td>{source.yield ? `${source.yield.toLocaleString()} L/hr` : source.capacity || "-"}</td><td><span className="text-black/45">⌕ ⋮</span></td></tr>)}
+              {rows.slice(0, 6).map((source) => <tr key={source.id || source.name} className={`border-t border-black/10 ${selected?.id === source.id ? "bg-emerald-50" : ""}`} onClick={() => setSelected(source)}><td className="p-3 font-medium">{source.name}</td><td><Badge>{source.type}</Badge></td><td>{source.districtName || source.subCounty}</td><td><span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusTone[source.status] || statusTone.ACTIVE}`}>{source.status}</span></td><td>{source.yield ? `${source.yield.toLocaleString()} L/hr` : source.capacity || "-"}</td><td><span className="text-black/45">⌕ ⋮</span></td></tr>)}
+              {!rows.length && <tr><td colSpan={6} className="p-6 text-center text-sm text-black/50">No water sources returned by the backend.</td></tr>}
             </tbody>
           </table>
       </div>
@@ -87,11 +87,3 @@ function SummaryCard({ title, value }) {
 function Badge({ children }) {
   return <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{children}</span>;
 }
-
-const fallbackSources = [
-  { name: "Kibwezi Borehole 04", type: "Borehole", subCounty: "Kibwezi West", status: "ACTIVE", capacity: "-" },
-  { name: "Mbooni Borehole 02", type: "Borehole", subCounty: "Mbooni", status: "ACTIVE", capacity: "-" },
-  { name: "Kilome Dam", type: "Dam", subCounty: "Kilome", status: "UNDER_REPAIR", capacity: "224,000 m³" },
-  { name: "Nziu Pan", type: "Dam", subCounty: "Kibwezi East", status: "DRY", capacity: "85,000 m³" },
-  { name: "Kaiti Water Point", type: "Water Point", subCounty: "Kaiti", status: "ACTIVE", capacity: "-" }
-];

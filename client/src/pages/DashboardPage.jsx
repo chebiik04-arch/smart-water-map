@@ -33,83 +33,11 @@ import {
 } from "recharts";
 import { endpoints } from "../services/api";
 import { geoJsonPointToLatLng } from "../utils/geoHelpers";
+import { asArray } from "../utils/apiData";
 
 const mapCenter = [-2.25, 37.85];
 
-const fallbackDistrict = {
-  type: "FeatureCollection",
-  features: [
-    {
-      id: "makueni",
-      type: "Feature",
-      properties: { name: "Makueni County", droughtRiskLevel: "WARNING" },
-      geometry: {
-        type: "Polygon",
-        coordinates: [[
-          [37.08, -1.62],
-          [37.62, -1.43],
-          [38.26, -1.63],
-          [38.74, -2.01],
-          [38.52, -2.72],
-          [37.88, -2.95],
-          [37.24, -2.67],
-          [36.95, -2.1],
-          [37.08, -1.62]
-        ]]
-      }
-    }
-  ]
-};
-
-const rainfallTrend = [
-  { label: "Dec", value: 49 },
-  { label: "Jan", value: 82 },
-  { label: "Feb", value: 96 },
-  { label: "Mar", value: 57 },
-  { label: "Apr", value: 39 },
-  { label: "May", value: 6 }
-];
-
-const ndviTrend = [
-  { label: "Dec", value: 0.35 },
-  { label: "Jan", value: 0.58 },
-  { label: "Feb", value: 0.68 },
-  { label: "Mar", value: 0.59 },
-  { label: "Apr", value: 0.42 },
-  { label: "May", value: 0.41 }
-];
-
-const groundwaterTrend = [
-  { label: "Dec", value: 13 },
-  { label: "Jan", value: 16 },
-  { label: "Feb", value: 14 },
-  { label: "Mar", value: 17 },
-  { label: "Apr", value: 20 },
-  { label: "May", value: 24 }
-];
-
-const droughtHotspots = [
-  [-2.31, 37.63, 34],
-  [-2.58, 38.32, 31],
-  [-2.12, 37.45, 23],
-  [-1.88, 37.79, 18],
-  [-2.41, 38.08, 19],
-  [-2.7, 38.0, 24],
-  [-2.22, 38.45, 16]
-];
-
-const fallbackPoints = [
-  { id: "b1", type: "BOREHOLE", label: "Borehole", position: [-2.12, 37.48] },
-  { id: "b2", type: "BOREHOLE", label: "Borehole", position: [-2.4, 37.82] },
-  { id: "b3", type: "BOREHOLE", label: "Borehole", position: [-2.62, 38.25] },
-  { id: "w1", type: "WATER_POINT", label: "Water point", position: [-1.95, 37.68] },
-  { id: "w2", type: "WATER_POINT", label: "Water point", position: [-2.32, 38.12] },
-  { id: "w3", type: "WATER_POINT", label: "Water point", position: [-2.55, 37.42] },
-  { id: "s1", type: "SENSOR", label: "Sensor", position: [-2.2, 37.98] },
-  { id: "s2", type: "SENSOR", label: "Sensor", position: [-2.72, 38.05] },
-  { id: "s3", type: "SENSOR", label: "Sensor", position: [-1.78, 38.31] },
-  { id: "r1", type: "REPORT", label: "Community report", position: [-2.47, 38.52] }
-];
+const emptyFeatureCollection = { type: "FeatureCollection", features: [] };
 
 const riskColors = {
   NORMAL: "#159957",
@@ -146,7 +74,7 @@ export function DashboardPage() {
       ]);
       return {
         summary: summaryRes.status === "fulfilled" ? summaryRes.value.data : {},
-        districts: districtRes.status === "fulfilled" ? districtRes.value.data : fallbackDistrict,
+        districts: districtRes.status === "fulfilled" ? districtRes.value.data : emptyFeatureCollection,
         sensors: asArray(sensorRes.status === "fulfilled" ? sensorRes.value.data : []),
         alerts: asArray(alertRes.status === "fulfilled" ? alertRes.value.data : []),
         reports: asArray(reportRes.status === "fulfilled" ? reportRes.value.data : []),
@@ -156,25 +84,60 @@ export function DashboardPage() {
   });
 
   const summary = dashboardData.summary || {};
-  const districts = dashboardData.districts || fallbackDistrict;
+  const districts = dashboardData.districts || emptyFeatureCollection;
+  const districtFeatures = asArray(districts.features);
+  const selectedDistrict = districtFeatures[0];
+  const selectedDistrictId = selectedDistrict?.id;
+  const selectedDistrictName = selectedDistrict?.properties?.name || "Selected area";
   const sensors = asArray(dashboardData.sensors);
   const alerts = asArray(dashboardData.alerts);
   const reports = asArray(dashboardData.reports);
   const boreholes = asArray(dashboardData.boreholes);
-  const onlineSensors = sensors.filter((sensor) => sensor.status === "ONLINE").length || summary.sensors?.online || summary.sensorsOnline || 22;
-  const waterSourceTotal = summary.waterSources?.total || Math.max(124, boreholes.length + reports.length + 98);
-  const activeWaterSources = summary.waterSources?.active || Math.max(98, boreholes.filter((item) => item.status === "FUNCTIONAL").length + 96);
-  const alertCount = summary.alertsToday || alerts.length || summary.activeAlerts || 18;
+  const onlineSensors = summary.sensors?.online ?? summary.sensorsOnline ?? sensors.filter((sensor) => sensor.status === "ONLINE").length;
+  const totalSensors = summary.sensors?.total ?? summary.sensorsOnline ?? sensors.length;
+  const waterSourceTotal = summary.waterSources?.total ?? boreholes.length;
+  const activeWaterSources = summary.waterSources?.active ?? boreholes.filter((item) => ["FUNCTIONAL", "ACTIVE", "ONLINE"].includes(item.status)).length;
+  const alertCount = summary.alertsToday ?? summary.activeAlerts ?? alerts.length;
   const recentReports = reports.length ? reports : asArray(summary.recentCommunityReports);
-  const riskLevel = summary.droughtRisk?.level || (alertCount > 10 || summary.districtsAtRisk ? "HIGH" : "MODERATE");
-  const droughtScore = summary.droughtRisk?.score || (riskLevel === "HIGH" ? 0.78 : 0.54);
+  const riskLevel = summary.droughtRisk?.level || selectedDistrict?.properties?.droughtRiskLevel || "UNKNOWN";
+  const droughtScore = summary.droughtRisk?.score ?? 0;
   const mapPoints = useMemo(() => buildMapPoints({ sensors, reports, boreholes }), [sensors, reports, boreholes]);
+
+  const { data: rainfallData } = useQuery({
+    queryKey: ["dashboard-rainfall", selectedDistrictId],
+    queryFn: () => endpoints.rainfallSeries(selectedDistrictId, { months: 6 }).then((res) => res.data),
+    enabled: Boolean(selectedDistrictId)
+  });
+  const { data: ndviData } = useQuery({
+    queryKey: ["dashboard-ndvi", selectedDistrictId],
+    queryFn: () => endpoints.ndviSeries(selectedDistrictId, { months: 6 }).then((res) => res.data),
+    enabled: Boolean(selectedDistrictId)
+  });
+  const { data: groundwaterData } = useQuery({
+    queryKey: ["dashboard-groundwater", selectedDistrictId],
+    queryFn: () => endpoints.groundwaterSeries(selectedDistrictId, { months: 6 }).then((res) => res.data),
+    enabled: Boolean(selectedDistrictId)
+  });
+  const { data: forecast } = useQuery({
+    queryKey: ["dashboard-forecast", selectedDistrictId],
+    queryFn: () => endpoints.latestForecast(selectedDistrictId).then((res) => res.data),
+    enabled: Boolean(selectedDistrictId)
+  });
+  const { data: heatmapData } = useQuery({
+    queryKey: ["dashboard-heatmap", selectedDistrictId],
+    queryFn: () => endpoints.droughtHeatmap({ districtId: selectedDistrictId }).then((res) => res.data),
+    enabled: Boolean(selectedDistrictId)
+  });
+  const rainfallTrend = asArray(rainfallData).map((row) => ({ label: row.month || row.label, value: row.mmTotal ?? row.value ?? 0 }));
+  const ndviTrend = asArray(ndviData).map((row) => ({ label: row.month || row.label, value: row.value ?? 0 }));
+  const groundwaterTrend = asArray(groundwaterData).map((row) => ({ label: row.month || row.label, value: Math.abs(row.avgDepth ?? row.value ?? 0) }));
+  const droughtHotspots = asArray(heatmapData).map((point) => [point.lat ?? point.latitude, point.lng ?? point.longitude, point.radius ?? point.intensity ?? point.value ?? 12]).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
 
   return (
     <section className="space-y-4 bg-[#F5F6F4] p-4 text-[#17201d] lg:p-5">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard title="Water Sources" value={waterSourceTotal} subtext={`Active: ${activeWaterSources}`} icon={Droplet} iconClass="bg-blue-500 text-white" />
-        <MetricCard title="Active Sensors" value={summary.sensors?.total || summary.sensorsOnline || onlineSensors} subtext={`Online: ${onlineSensors}`} icon={Wifi} iconClass="bg-emerald-100 text-emerald-700" />
+        <MetricCard title="Active Sensors" value={totalSensors} subtext={`Online: ${onlineSensors}`} icon={Wifi} iconClass="bg-emerald-100 text-emerald-700" />
         <MetricCard title="Drought Risk Level" value={riskLevel} subtext={`Score: ${droughtScore.toFixed(2)}`} icon={TrendingUp} danger />
         <MetricCard title="Alerts (Today)" value={alertCount} subtext="View all alerts" compact />
         <MetricCard title="Export Report" value="PDF" subtext="County summary" icon={FileDown} iconClass="bg-primary text-white" />
@@ -184,13 +147,13 @@ export function DashboardPage() {
         <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
           <div className="grid min-h-[390px] grid-cols-1 bg-white xl:grid-cols-[17rem_minmax(0,1fr)_16rem]">
             <aside className="z-[500] border-b border-black/10 bg-white/95 p-4 xl:border-b-0 xl:border-r">
-              <h1 className="text-xl font-bold leading-tight">Makueni County</h1>
+              <h1 className="text-xl font-bold leading-tight">{selectedDistrictName}</h1>
               <p className="mt-1 text-sm text-black/60">County shapefile / selected AOI</p>
 
               <label className="mt-4 block text-sm font-semibold">
                 County, shapefile or AOI
                 <select className="mt-2 w-full rounded-md border border-black/15 bg-white px-3 py-2 text-sm">
-                  <option>Makueni County shapefile</option>
+                  <option>{selectedDistrictName} shapefile</option>
                   <option>Select another county</option>
                   <option>Upload shapefile</option>
                   <option>Draw desired AOI</option>
@@ -214,7 +177,7 @@ export function DashboardPage() {
             </aside>
 
             <div className="relative min-h-[390px]">
-              <DashboardMap districts={districts} points={mapPoints} layers={layers} activeBasemap={activeBasemap} />
+              <DashboardMap districts={districts} points={mapPoints} layers={layers} activeBasemap={activeBasemap} droughtHotspots={droughtHotspots} />
               <div className="absolute bottom-4 left-4 z-[500] rounded-md border border-black/20 bg-white/95 px-3 py-2 shadow-sm">
                 <div className="h-1 w-24 border-x-2 border-b-2 border-black" />
                 <p className="mt-1 text-xs font-semibold text-black/70">0 5 10 km</p>
@@ -251,7 +214,7 @@ export function DashboardPage() {
             title="Latest Alerts"
             action="View all"
             headerClass="bg-red-500 text-white"
-            items={(alerts.length ? alerts : fallbackAlerts).slice(0, 3).map((alert, index) => ({
+            items={alerts.slice(0, 3).map((alert, index) => ({
               id: alert.id || index,
               title: alert.message || alert.title,
               subtitle: alert.district?.name || alert.districtName || alert.subtitle,
@@ -263,7 +226,7 @@ export function DashboardPage() {
           <FeedPanel
             title="Recent Reports"
             action="View all"
-            items={(recentReports.length ? recentReports : fallbackReports).slice(0, 4).map((report, index) => ({
+            items={recentReports.slice(0, 4).map((report, index) => ({
               id: report.id || index,
               title: report.description || report.title,
               subtitle: report.createdAt ? formatDate(report.createdAt) : report.subtitle,
@@ -276,7 +239,7 @@ export function DashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.25fr]">
         <ChartCard title="Rainfall Trend (Last 6 Months)">
-          <ResponsiveContainer width="100%" height={150}>
+          {rainfallTrend.length ? <ResponsiveContainer width="100%" height={150}>
             <BarChart data={rainfallTrend}>
               <CartesianGrid stroke="#E7EAE5" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -286,10 +249,10 @@ export function DashboardPage() {
                 {rainfallTrend.map((entry) => <Cell key={entry.label} fill={entry.label === "May" ? "#DDE5F6" : "#2D8CFF"} />)}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer> : <EmptyChart message="No rainfall series returned by the backend." />}
         </ChartCard>
         <ChartCard title="Vegetation Health (NDVI)">
-          <ResponsiveContainer width="100%" height={150}>
+          {ndviTrend.length ? <ResponsiveContainer width="100%" height={150}>
             <LineChart data={ndviTrend}>
               <CartesianGrid stroke="#E7EAE5" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -297,10 +260,10 @@ export function DashboardPage() {
               <ChartTooltip />
               <Line type="monotone" dataKey="value" name="NDVI" stroke="#159957" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer> : <EmptyChart message="No NDVI series returned by the backend." />}
         </ChartCard>
         <ChartCard title="Groundwater Levels">
-          <ResponsiveContainer width="100%" height={150}>
+          {groundwaterTrend.length ? <ResponsiveContainer width="100%" height={150}>
             <LineChart data={groundwaterTrend}>
               <CartesianGrid stroke="#E7EAE5" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -308,15 +271,15 @@ export function DashboardPage() {
               <ChartTooltip />
               <Line type="monotone" dataKey="value" name="Water Level (m)" stroke="#2D8CFF" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer> : <EmptyChart message="No groundwater series returned by the backend." />}
         </ChartCard>
-        <ForecastCard />
+        <ForecastCard forecast={forecast} />
       </div>
     </section>
   );
 }
 
-function DashboardMap({ districts, points, layers, activeBasemap }) {
+function DashboardMap({ districts, points, layers, activeBasemap, droughtHotspots }) {
   return (
     <MapContainer center={mapCenter} zoom={9} minZoom={7} zoomControl className="z-0 h-full min-h-[390px]">
       <TileLayer
@@ -325,7 +288,7 @@ function DashboardMap({ districts, points, layers, activeBasemap }) {
       />
       {layers.ndvi && (
         <GeoJSON
-          data={districts || fallbackDistrict}
+          data={districts}
           style={() => ({ color: "#159957", fillColor: "#A7F3D0", fillOpacity: 0.24, weight: 1 })}
         />
       )}
@@ -381,7 +344,7 @@ function FeedPanel({ title, action, items, headerClass = "", }) {
         <button className="text-xs font-medium opacity-80">{action}</button>
       </div>
       <div className="divide-y divide-black/10">
-        {items.map((item) => {
+        {items.length ? items.map((item) => {
           const Icon = item.icon;
           return (
             <div key={item.id} className="flex items-center gap-3 px-4 py-3">
@@ -394,32 +357,33 @@ function FeedPanel({ title, action, items, headerClass = "", }) {
               {!item.meta && <ArrowRight size={15} className="text-black/35" />}
             </div>
           );
-        })}
+        }) : <p className="px-4 py-6 text-sm text-black/50">No records returned by the backend.</p>}
       </div>
     </section>
   );
 }
 
-function ForecastCard() {
+function ForecastCard({ forecast }) {
+  const pct = Math.round((forecast?.riskScore || 0) * 100);
+  const riskLabel = forecast?.riskLabel || (pct >= 76 ? "Emergency" : pct >= 51 ? "High Risk" : pct >= 31 ? "Watch" : "Normal");
+  const drivers = asArray(forecast?.drivers);
+  const recommendations = asArray(forecast?.recommendation);
   return (
     <section className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
       <h2 className="text-sm font-bold">AI Drought Forecast <span className="text-xs font-medium">(Next 30 Days)</span></h2>
       <div className="mt-4 grid grid-cols-[9rem_1fr] gap-5">
         <div className="relative h-36">
-          <div className="absolute inset-0 rounded-full bg-[conic-gradient(#EF4444_0_78%,#E5E7EB_78%_100%)]" />
+          <div className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(#EF4444 0 ${pct}%, #E5E7EB ${pct}% 100%)` }} />
           <div className="absolute inset-[20px] grid place-items-center rounded-full bg-white text-center">
-            <p className="text-4xl font-bold">78%</p>
-            <p className="text-xs font-bold text-red-500">High Risk</p>
+            <p className="text-4xl font-bold">{pct}%</p>
+            <p className="text-xs font-bold text-red-500">{riskLabel}</p>
           </div>
         </div>
         <div className="text-xs">
           <p className="font-bold">Drivers</p>
-          <Driver icon={ArrowDown} text="Rainfall Deficit" />
-          <Driver icon={ArrowUp} text="Temperature Anomaly" />
-          <Driver icon={ArrowDown} text="Vegetation Health" />
-          <Driver icon={ArrowDown} text="Soil Moisture" />
+          {drivers.length ? drivers.map((driver) => <Driver key={driver.factor} icon={driver.direction === "UP" ? ArrowUp : ArrowDown} text={driver.factor} />) : <p className="mt-1 text-black/50">No drivers returned.</p>}
           <p className="mt-3 font-bold text-emerald-700">Recommendation</p>
-          <p className="mt-1 text-black/65">Increase water harvesting. Monitor boreholes closely.</p>
+          <p className="mt-1 text-black/65">{recommendations.length ? recommendations.join(". ") : "No recommendations returned."}</p>
         </div>
       </div>
     </section>
@@ -471,13 +435,11 @@ function Driver({ icon: Icon, text }) {
 }
 
 function buildMapPoints({ sensors, reports, boreholes }) {
-  const apiPoints = [
+  return [
     ...boreholes.map((item) => ({ id: item.id, type: "BOREHOLE", label: item.name || "Borehole", position: geoJsonPointToLatLng(item.location) })),
     ...sensors.map((item) => ({ id: item.id, type: "SENSOR", label: item.type || "Sensor", position: geoJsonPointToLatLng(item.location) })),
     ...reports.map((item) => ({ id: item.id, type: "REPORT", label: item.description || "Community report", position: geoJsonPointToLatLng(item.location) }))
   ].filter((item) => item.position);
-
-  return apiPoints.length ? apiPoints : fallbackPoints;
 }
 
 function shouldShowPoint(type, layers) {
@@ -501,18 +463,6 @@ function pointStyle(type) {
 
 function toggleLayer(setLayers, key) {
   setLayers((current) => ({ ...current, [key]: !current[key] }));
-}
-
-function asArray(value) {
-  if (Array.isArray(value)) return value;
-  if (Array.isArray(value?.data)) return value.data;
-  if (Array.isArray(value?.items)) return value.items;
-  if (Array.isArray(value?.results)) return value.results;
-  if (Array.isArray(value?.reports)) return value.reports;
-  if (Array.isArray(value?.alerts)) return value.alerts;
-  if (Array.isArray(value?.sensors)) return value.sensors;
-  if (Array.isArray(value?.boreholes)) return value.boreholes;
-  return [];
 }
 
 function basemapSwatch(item) {
@@ -547,15 +497,6 @@ function relativeTime(value) {
   return `${hours}h ago`;
 }
 
-const fallbackAlerts = [
-  { id: "a1", title: "High Drought Risk", subtitle: "Kibwezi East Sub-county", meta: "2 hours ago" },
-  { id: "a2", title: "Low Water Levels", subtitle: "Mbooni Sub-county", meta: "4 hours ago" },
-  { id: "a3", title: "Rainfall Deficit", subtitle: "Kilome Sub-county", meta: "6 hours ago" }
-];
-
-const fallbackReports = [
-  { id: "r1", title: "Water shortage in Muthwani area", subtitle: "Today, 08:45 AM" },
-  { id: "r2", title: "Dry borehole in Ikanga village", subtitle: "Today, 07:15 AM" },
-  { id: "r3", title: "Broken pump at Nziu Mbitini", subtitle: "Yesterday, 04:35 PM" },
-  { id: "r4", title: "Livestock water shortage", subtitle: "Yesterday, 01:20 PM" }
-];
+function EmptyChart({ message }) {
+  return <div className="grid h-[150px] place-items-center rounded bg-black/[0.03] text-center text-sm text-black/50">{message}</div>;
+}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Bell,
@@ -22,6 +23,7 @@ import { useAuthStore } from "../stores/authStore";
 import { useLanguageStore } from "../stores/languageStore";
 import { languages } from "../i18n/translations";
 import { WeatherWidget } from "../components/layout/WeatherWidget";
+import { endpoints } from "../services/api";
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
@@ -60,9 +62,11 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { data: districts } = useQuery({ queryKey: ["layout-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const visibleLinks = links.filter((link) => !link.admin || user?.role === "admin");
   const title = pageTitles[location.pathname] || "Dashboard";
-  const displayName = user?.name || "Jane Mutua";
+  const districtName = districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
+  const displayName = user?.name || user?.email || "User";
   const role = user?.role ? user.role.replace("_", " ") : "County Officer";
 
   return (
@@ -152,7 +156,7 @@ export function AppLayout() {
             </button>
             <div className="flex items-baseline gap-3">
               <h1 className="text-lg font-bold">{title}</h1>
-              <p className="hidden text-xs text-black/55 sm:block">Makueni County, Kenya</p>
+              <p className="hidden text-xs text-black/55 sm:block">{districtName}, Kenya</p>
             </div>
           </div>
 

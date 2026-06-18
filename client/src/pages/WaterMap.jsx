@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DroughtMap } from "../components/map/DroughtMap";
 import { TimeSeriesChart } from "../components/TimeSeriesChart";
 import { endpoints } from "../services/api";
+import { featuresToProperties } from "../utils/apiData";
 
 export function WaterMap() {
   const [selectedSource, setSelectedSource] = useState(null);
@@ -10,7 +11,7 @@ export function WaterMap() {
     queryKey: ["water-map-sources"],
     queryFn: () => endpoints.waterSources().then((res) => res.data)
   });
-  const rows = useMemo(() => (sources?.features || []).map((feature) => feature.properties), [sources]);
+  const rows = useMemo(() => featuresToProperties(sources), [sources]);
 
   return (
     <section className="space-y-4 p-4 lg:p-5">
@@ -19,22 +20,23 @@ export function WaterMap() {
       </div>
       <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-black/10 p-4">
-          <h2 className="text-sm font-bold">Water Points ({rows.length || 124})</h2>
+          <h2 className="text-sm font-bold">Water Points ({rows.length})</h2>
           <a href="/water-sources" className="text-xs font-medium text-blue-600">View all</a>
         </div>
         <table className="w-full text-left text-sm">
           <thead className="bg-background"><tr><th className="p-3">Name</th><th>Type</th><th>Sub-county</th><th>Status</th><th>Water Level</th><th>Last Updated</th></tr></thead>
           <tbody>
-            {(rows.length ? rows : fallbackRows).slice(0, 6).map((source) => (
+            {rows.slice(0, 6).map((source) => (
               <tr key={source.id || source.name} className="border-t border-black/10">
                 <td className="p-3 font-medium">{source.name}</td>
                 <td>{source.type}</td>
                 <td>{source.districtName || source.subCounty}</td>
                 <td><span className={`rounded-full px-2 py-1 text-xs font-semibold ${source.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : source.status === "DRY" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{source.status}</span></td>
                 <td>{source.latestLevel ?? source.waterLevel ?? "-"} m</td>
-                <td>{source.lastInspected ? new Date(source.lastInspected).toLocaleTimeString() : source.updated || "12 mins ago"}</td>
+                <td>{source.lastInspected ? new Date(source.lastInspected).toLocaleTimeString() : "-"}</td>
               </tr>
             ))}
+            {!rows.length && <EmptyRow colSpan={6} message="No water points returned by the backend." />}
           </tbody>
         </table>
       </div>
@@ -61,9 +63,6 @@ function Metric({ label, value }) {
   return <div className="rounded-md bg-background p-3"><p className="text-xs text-black/50">{label}</p><p className="font-semibold">{value}</p></div>;
 }
 
-const fallbackRows = [
-  { name: "Kibwezi Borehole 04", type: "Borehole", subCounty: "Kibwezi West", status: "ACTIVE", waterLevel: "18.4", updated: "5 mins ago" },
-  { name: "Mbooni Borehole 02", type: "Borehole", subCounty: "Mbooni", status: "ACTIVE", waterLevel: "21.7", updated: "12 mins ago" },
-  { name: "Kilome Dam", type: "Surface Water", subCounty: "Kilome", status: "UNDER_REPAIR", waterLevel: "4.2", updated: "30 mins ago" },
-  { name: "Kaiti Water Point", type: "Water Point", subCounty: "Kaiti", status: "ACTIVE", waterLevel: "-", updated: "1 hour ago" }
-];
+function EmptyRow({ colSpan, message }) {
+  return <tr><td colSpan={colSpan} className="p-6 text-center text-sm text-black/50">{message}</td></tr>;
+}

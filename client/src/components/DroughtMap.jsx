@@ -5,6 +5,7 @@ import { Activity, Droplets, Layers, RadioTower, ShieldAlert, Waves } from "luci
 import { endpoints } from "../services/api";
 import { createSocket } from "../services/socket";
 import { districtStyle, droughtColor, geoJsonPointToLatLng, scoreColor } from "../utils/geoHelpers";
+import { asArray } from "../utils/apiData";
 import { SeverityBadge } from "./SeverityBadge";
 import { WaterTableTerrain } from "./WaterTableTerrain";
 
@@ -71,15 +72,15 @@ export function DroughtMap() {
       endpoints.livestockWaterStress()
     ]).then(([districtRes, sensorRes, alertRes, reportRes, timelineRes, boreholeRes, conflictRes, hydroRes, livestockRes]) => {
       setDistricts(districtRes.data);
-      setSensors(sensorRes.data);
-      setAlerts(alertRes.data);
-      setReports(reportRes.data);
-      setTimeline(timelineRes.data);
-      setBoreholes(boreholeRes.data);
+      setSensors(asArray(sensorRes.data));
+      setAlerts(asArray(alertRes.data));
+      setReports(asArray(reportRes.data));
+      setTimeline(asArray(timelineRes.data));
+      setBoreholes(asArray(boreholeRes.data));
       setConflictRisks(conflictRes.data);
       setHydroEvents(hydroRes.data);
       setLivestockStress(livestockRes.data);
-      setWeekIndex(Math.max(0, uniqueWeeks(timelineRes.data).length - 1));
+      setWeekIndex(Math.max(0, uniqueWeeks(asArray(timelineRes.data)).length - 1));
     }).catch(() => {});
   }, []);
 

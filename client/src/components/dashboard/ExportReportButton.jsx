@@ -12,7 +12,7 @@ export function ExportReportButton({ districtId }) {
     doc.setFontSize(18);
     doc.text("Smart Water Intelligence Report", 14, 18);
     doc.setFontSize(11);
-    doc.text(`${data.county || "Makueni County"} · ${date}`, 14, 27);
+    doc.text(`${data.county || "Selected area"} · ${date}`, 14, 27);
     autoTable(doc, {
       startY: 36,
       head: [["Metric", "Value"]],

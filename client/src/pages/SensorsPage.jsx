@@ -2,17 +2,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { RadioTower, WifiOff, Wrench } from "lucide-react";
 import { endpoints } from "../services/api";
+import { asArray } from "../utils/apiData";
 
 export function SensorsPage() {
-  const { data: sensors = [] } = useQuery({
+  const { data } = useQuery({
     queryKey: ["sensors-page"],
     queryFn: () => endpoints.sensors().then((res) => res.data)
   });
-  const total = sensors.length || 26;
-  const online = sensors.filter((sensor) => sensor.status === "ONLINE").length || 22;
-  const offline = sensors.filter((sensor) => sensor.status === "OFFLINE").length || 4;
+  const sensors = asArray(data);
+  const total = sensors.length;
+  const online = sensors.filter((sensor) => sensor.status === "ONLINE").length;
+  const offline = sensors.filter((sensor) => sensor.status === "OFFLINE").length;
   const maintenance = sensors.filter((sensor) => sensor.status === "MAINTENANCE").length;
-  const onlinePct = Math.round((online / total) * 1000) / 10;
+  const onlinePct = total ? Math.round((online / total) * 1000) / 10 : 0;
   const donut = [{ name: "Online", value: online }, { name: "Offline", value: offline }, { name: "Maintenance", value: maintenance }];
 
   return (
@@ -43,7 +45,7 @@ export function SensorsPage() {
           </div>
           <div className="space-y-2 text-sm">
             <Legend color="bg-emerald-500" label="Online" value={`${online} (${onlinePct}%)`} />
-            <Legend color="bg-red-500" label="Offline" value={`${offline} (${Math.round((offline / total) * 1000) / 10}%)`} />
+            <Legend color="bg-red-500" label="Offline" value={`${offline} (${total ? Math.round((offline / total) * 1000) / 10 : 0}%)`} />
           </div>
         </section>
 
@@ -55,16 +57,17 @@ export function SensorsPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-background"><tr><th className="p-3">Sensor ID</th><th>Type</th><th>Location</th><th>Status</th><th>Last Reading</th><th>Battery</th></tr></thead>
             <tbody>
-              {(sensors.length ? sensors : fallbackSensors).map((sensor, index) => (
+              {sensors.map((sensor, index) => (
                 <tr key={sensor.id || index} className="border-t border-black/10">
                   <td className="p-3 font-medium">{sensor.id?.slice(0, 8) || `SEN-${String(index + 1).padStart(3, "0")}`}</td>
                   <td>{sensor.type}</td>
                   <td>{sensor.districtName || sensor.locationName}</td>
                   <td><span className={`rounded-full px-2 py-1 text-xs font-semibold ${sensor.status === "ONLINE" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{sensor.status}</span></td>
                   <td>{sensor.lastPing ? new Date(sensor.lastPing).toLocaleTimeString() : sensor.lastReading || "-"}</td>
-                  <td>{sensor.battery || `${78 - index * 6}%`}</td>
+                  <td>{sensor.battery || "-"}</td>
                 </tr>
               ))}
+              {!sensors.length && <tr><td colSpan={6} className="p-6 text-center text-sm text-black/50">No sensors returned by the backend.</td></tr>}
             </tbody>
           </table>
         </section>
@@ -80,11 +83,3 @@ function Metric({ title, value, tone = "text-black", icon: Icon }) {
 function Legend({ color, label, value }) {
   return <div className="flex items-center justify-between"><span className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${color}`} />{label}</span><strong>{value}</strong></div>;
 }
-
-const fallbackSensors = [
-  { type: "Water Level", status: "ONLINE", locationName: "Kibwezi Borehole", lastReading: "18.4m", battery: "78%" },
-  { type: "Soil Moisture", status: "ONLINE", locationName: "Makueni Field", lastReading: "24.6%", battery: "60%" },
-  { type: "Rain Gauge", status: "ONLINE", locationName: "Kilome ARS", lastReading: "0.0mm", battery: "90%" },
-  { type: "Water Level", status: "ONLINE", locationName: "Nziu Borehole", lastReading: "16.3m", battery: "86%" },
-  { type: "Soil Moisture", status: "OFFLINE", locationName: "Kaiti Farm 01", lastReading: "-", battery: "-" }
-];

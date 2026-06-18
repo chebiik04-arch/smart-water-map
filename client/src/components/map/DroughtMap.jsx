@@ -7,6 +7,7 @@ import "leaflet.markercluster";
 import { CloudRain, Droplet, Layers, RadioTower, Sprout, Waves } from "lucide-react";
 import { endpoints } from "../../services/api";
 import { geoJsonPointToLatLng } from "../../utils/geoHelpers";
+import { asArray } from "../../utils/apiData";
 
 const basemaps = {
   OpenStreetMap: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -36,18 +37,21 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
 
   const { data: districts } = useQuery({ queryKey: ["districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const { data: sources } = useQuery({ queryKey: ["water-sources", districtId], queryFn: () => endpoints.waterSources({ districtId }).then((res) => res.data) });
-  const { data: sensors = [] } = useQuery({ queryKey: ["sensors", districtId], queryFn: () => endpoints.sensors({ districtId }).then((res) => res.data) });
-  const { data: reports = [] } = useQuery({ queryKey: ["map-reports", districtId], queryFn: () => endpoints.communityReports({ districtId, limit: 50 }).then((res) => res.data) });
-  const { data: heatPoints = [] } = useQuery({ queryKey: ["heatmap", districtId], queryFn: () => endpoints.droughtHeatmap({ districtId }).then((res) => res.data) });
+  const { data: sensorData } = useQuery({ queryKey: ["sensors", districtId], queryFn: () => endpoints.sensors({ districtId }).then((res) => res.data) });
+  const { data: reportData } = useQuery({ queryKey: ["map-reports", districtId], queryFn: () => endpoints.communityReports({ districtId, limit: 50 }).then((res) => res.data) });
+  const { data: heatmapData } = useQuery({ queryKey: ["heatmap", districtId], queryFn: () => endpoints.droughtHeatmap({ districtId }).then((res) => res.data) });
 
   const waterSources = sources?.features || [];
+  const sensors = asArray(sensorData);
+  const reports = asArray(reportData);
+  const heatPoints = asArray(heatmapData);
 
   return (
     <div className="relative h-full min-h-[430px]">
       <MapContainer center={defaultCenter} zoom={Number(import.meta.env.VITE_MAP_DEFAULT_ZOOM || 9)} minZoom={7} className="z-0">
         <TileLayer attribution="&copy; OpenStreetMap contributors" url={basemaps[basemap]} />
         <ScaleControl position="bottomleft" metric imperial={false} />
-        {districts && <GeoJSON data={districts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Makueni County", { permanent: true, direction: "center" })} />}
+        {districts && <GeoJSON data={districts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
         {layers.ndvi && districts && <GeoJSON data={districts} style={() => ({ color: "#22C55E", fillColor: "#BBF7D0", fillOpacity: 0.2, weight: 1 })} />}
         {layers.hotspots && <HeatLayer points={heatPoints} opacity={heatOpacity} />}
         <LayerGroup>
@@ -85,7 +89,7 @@ function HeatLayer({ points, opacity }) {
   const map = useMap();
   useEffect(() => {
     if (!map || !points?.length) return undefined;
-    const layer = L.heatLayer(points.map((point) => [point.lat, point.lng, point.intensity]), {
+    const layer = L.heatLayer(points.map((point) => [point.lat, point.lng, point.intensity ?? point.value ?? 0]), {
       radius: 35,
       blur: 25,
       maxZoom: 12,

@@ -5,8 +5,8 @@ export function WaterTableTerrain({ snapshot }) {
   const mountRef = useRef(null);
 
   const terrain = useMemo(() => {
-    const depth = snapshot?.groundwaterDepthMeters || 45;
-    const severity = snapshot?.severityScore || 40;
+    const depth = snapshot?.groundwaterDepthMeters ?? 0;
+    const severity = snapshot?.severityScore ?? 0;
     return { depth, severity, waterY: -0.35 - Math.min(depth, 90) / 160 };
   }, [snapshot]);
 
@@ -85,8 +85,8 @@ export function WaterTableTerrain({ snapshot }) {
     <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-panel">
       <div ref={mountRef} className="h-44 w-full" />
       <div className="grid grid-cols-2 gap-2 border-t border-black/10 p-3 text-xs">
-        <Metric label="Water table" value={`${terrain.depth.toFixed(1)} m`} />
-        <Metric label="Severity" value={`${terrain.severity.toFixed(0)}/100`} />
+        <Metric label="Water table" value={snapshot ? `${terrain.depth.toFixed(1)} m` : "-"} />
+        <Metric label="Severity" value={snapshot ? `${terrain.severity.toFixed(0)}/100` : "-"} />
       </div>
     </div>
   );
