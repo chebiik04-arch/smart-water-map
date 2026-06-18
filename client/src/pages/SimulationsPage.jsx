@@ -7,8 +7,7 @@ import { endpoints } from "../services/api";
 
 export function SimulationsPage() {
   const [districts, setDistricts] = useState([]);
-  const [runs, setRuns] = useState([]);
-  const [form, setForm] = useState({ districtId: "", scenarioName: "Rainfall drops 30% for 6 weeks", rainfallDropPercent: 30, durationWeeks: 6 });
+  const [form, setForm] = useState({ districtId: "", rainfallDropPercent: 30, durationWeeks: 6 });
   const { data: forecast } = useQuery({
     queryKey: ["forecast-page-latest", form.districtId],
     queryFn: () => endpoints.latestForecast(form.districtId).then((res) => res.data),
@@ -16,23 +15,12 @@ export function SimulationsPage() {
   });
 
   useEffect(() => {
-    Promise.all([endpoints.districts(), endpoints.simulations()]).then(([districtRes, simRes]) => {
+    endpoints.districts().then((districtRes) => {
       const options = (districtRes.data.features || []).map((feature) => ({ id: feature.id, name: feature.properties.name }));
       setDistricts(options);
-      setRuns(asArray(simRes.data));
       setForm((current) => ({ ...current, districtId: current.districtId || options[0]?.id || "" }));
     });
   }, []);
-
-  async function runSimulation(event) {
-    event.preventDefault();
-    const { data } = await endpoints.runGroundwaterSimulation({
-      ...form,
-      rainfallDropPercent: Number(form.rainfallDropPercent),
-      durationWeeks: Number(form.durationWeeks)
-    });
-    setRuns((current) => [data, ...current]);
-  }
 
   const probability = Math.round((forecast?.riskScore || 0.78) * 100);
   const districtOptions = districts.length ? districts : [{ id: "makueni-county", name: "Makueni County" }];
@@ -101,31 +89,6 @@ export function SimulationsPage() {
         </section>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
-        <form onSubmit={runSimulation} className="space-y-3 rounded-lg border border-black/10 bg-white p-4 shadow-panel">
-          <input className="w-full rounded-md border border-black/15 px-3 py-2" value={form.scenarioName} onChange={(e) => setForm({ ...form, scenarioName: e.target.value })} />
-          <select className="w-full rounded-md border border-black/15 px-3 py-2" value={selectedDistrictId} onChange={(e) => setForm({ ...form, districtId: e.target.value })}>
-            {districtOptions.map((district) => <option key={district.id} value={district.id}>{district.name}</option>)}
-          </select>
-          <label className="block text-sm font-medium">Rainfall drop %
-            <input type="number" className="mt-1 w-full rounded-md border border-black/15 px-3 py-2" value={form.rainfallDropPercent} onChange={(e) => setForm({ ...form, rainfallDropPercent: e.target.value })} />
-          </label>
-          <label className="block text-sm font-medium">Duration weeks
-            <input type="number" className="mt-1 w-full rounded-md border border-black/15 px-3 py-2" value={form.durationWeeks} onChange={(e) => setForm({ ...form, durationWeeks: e.target.value })} />
-          </label>
-          <button className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 font-semibold text-white"><Activity size={16} /> Run simulation</button>
-        </form>
-        <div className="grid gap-4 md:grid-cols-2">
-          {runs.map((run) => (
-            <article key={run.id} className="rounded-lg border border-black/10 bg-white p-4 shadow-panel">
-              <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">{run.scenarioName}</h2><TrendingDown className="text-warning" size={18} /></div>
-              <p className="mt-3 text-sm text-black/60">Baseline groundwater</p><p className="text-2xl font-semibold">{run.baselineGroundwater.toFixed(1)}%</p>
-              <p className="mt-3 text-sm text-black/60">Projected groundwater</p><p className="text-2xl font-semibold text-danger">{run.projectedGroundwater.toFixed(1)}%</p>
-              <p className="mt-3 rounded-full bg-danger/10 px-3 py-1 text-sm font-semibold text-danger">{run.projectedRiskLevel} · score {run.projectedSeverityScore}</p>
-            </article>
-          ))}
-        </div>
-      </div>
     </section>
   );
 }
@@ -153,12 +116,4 @@ function ForecastMetric({ title, value, subtext, icon: Icon, danger = false, war
 
 function Summary({ label, value }) {
   return <div><p className="text-xs text-black/50">{label}</p><p className="font-bold">{value}</p></div>;
-}
-
-function asArray(value) {
-  if (Array.isArray(value)) return value;
-  if (Array.isArray(value?.data)) return value.data;
-  if (Array.isArray(value?.items)) return value.items;
-  if (Array.isArray(value?.results)) return value.results;
-  return [];
 }
