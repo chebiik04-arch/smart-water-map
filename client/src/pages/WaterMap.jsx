@@ -15,7 +15,7 @@ export function WaterMap() {
   return (
     <section className="space-y-4 p-4 lg:p-5">
       <div className="h-[470px] overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
-        <DroughtMap allLayers onWaterSourceClick={setSelectedSource} />
+        <DroughtMap allLayers showLayerPanel={false} showLegend onWaterSourceClick={setSelectedSource} />
       </div>
       <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-black/10 p-4">

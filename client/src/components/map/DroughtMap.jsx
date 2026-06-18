@@ -20,7 +20,7 @@ const defaultCenter = [
   Number(import.meta.env.VITE_MAP_CENTER_LNG || 37.6)
 ];
 
-export function DroughtMap({ districtId, allLayers = false, expanded = false, onWaterSourceClick }) {
+export function DroughtMap({ districtId, allLayers = false, expanded = false, onWaterSourceClick, showLayerPanel = true, showLegend = false }) {
   const [basemap, setBasemap] = useState("OpenStreetMap");
   const [heatOpacity, setHeatOpacity] = useState(0.8);
   const [layers, setLayers] = useState({
@@ -75,7 +75,8 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
           return <CircleMarker key={report.id} center={position} radius={6} pathOptions={{ color: "#fff", weight: 2, fillColor: "#FACC15", fillOpacity: 0.95 }}><Popup><strong>{report.description}</strong><p>{report.timeAgo}</p></Popup></CircleMarker>;
         })}
       </MapContainer>
-      <MapPanels basemap={basemap} setBasemap={setBasemap} layers={layers} setLayers={setLayers} expanded={expanded} heatOpacity={heatOpacity} setHeatOpacity={setHeatOpacity} />
+      <MapPanels basemap={basemap} setBasemap={setBasemap} layers={layers} setLayers={setLayers} expanded={expanded} heatOpacity={heatOpacity} setHeatOpacity={setHeatOpacity} showLayerPanel={showLayerPanel} />
+      {showLegend && <MapLegend />}
     </div>
   );
 }
@@ -96,14 +97,14 @@ function HeatLayer({ points, opacity }) {
   return null;
 }
 
-function MapPanels({ basemap, setBasemap, layers, setLayers, expanded, heatOpacity, setHeatOpacity }) {
+function MapPanels({ basemap, setBasemap, layers, setLayers, expanded, heatOpacity, setHeatOpacity, showLayerPanel }) {
   return (
     <>
       <div className="absolute right-4 top-4 z-[500] w-44 rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
         <PanelTitle title="Basemap" />
         {Object.keys(basemaps).map((item) => <button key={item} onClick={() => setBasemap(item)} className="mt-2 flex w-full items-center gap-2 text-left text-xs"><span className="h-7 w-7 rounded bg-emerald-100" /><span className="flex-1">{item}</span><span className={`h-3 w-3 rounded-full border ${basemap === item ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} /></button>)}
       </div>
-      <div className="absolute bottom-4 right-4 z-[500] w-52 rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
+      {showLayerPanel && <div className="absolute bottom-4 right-4 z-[500] w-52 rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
         <PanelTitle title="Layers" />
         <LayerToggle label="Boreholes" color="bg-blue-500" checked={layers.boreholes} onChange={() => toggle(setLayers, "boreholes")} />
         <LayerToggle label="Water Points" color="bg-emerald-600" checked={layers.water} onChange={() => toggle(setLayers, "water")} />
@@ -114,8 +115,24 @@ function MapPanels({ basemap, setBasemap, layers, setLayers, expanded, heatOpaci
         <LayerToggle label="Soil Moisture (SMAP)" icon={Waves} checked={layers.soil} onChange={() => toggle(setLayers, "soil")} />
         <LayerToggle label="Community Reports" icon={Droplet} checked={layers.reports} onChange={() => toggle(setLayers, "reports")} />
         {expanded && <label className="mt-3 block text-xs">Heat opacity<input className="mt-1 w-full accent-emerald-700" type="range" min="0" max="1" step="0.05" value={heatOpacity} onChange={(event) => setHeatOpacity(Number(event.target.value))} /></label>}
-      </div>
+      </div>}
     </>
+  );
+}
+
+function MapLegend() {
+  const items = [
+    ["Boreholes", "bg-blue-500"],
+    ["Water Points", "bg-emerald-600"],
+    ["Sensors", "bg-teal-600"],
+    ["Drought Hotspots", "bg-orange-500"],
+    ["Rainfall", "bg-blue-300"],
+    ["Community Reports", "bg-yellow-400"]
+  ];
+  return (
+    <div className="absolute bottom-4 left-1/2 z-[500] flex w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-md border border-black/10 bg-white/95 px-4 py-2 text-[11px] shadow-sm">
+      {items.map(([label, color]) => <span key={label} className="flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-full ${color}`} />{label}</span>)}
+    </div>
   );
 }
 
