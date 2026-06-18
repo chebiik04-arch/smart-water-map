@@ -63,7 +63,11 @@ export function ReportsPage() {
     const payload = { districtId: form.districtId || undefined, latitude: Number(form.latitude), longitude: Number(form.longitude), waterLevel: Number(form.waterLevel), description: form.description, photoUrl: form.photoUrl || undefined, gpsAccuracyMeters: form.gpsAccuracyMeters ? Number(form.gpsAccuracyMeters) : undefined, photoMetadata: form.photoMetadata || undefined };
     try {
       if (navigator.onLine) {
-        await endpoints.communityReport(payload);
+        if (form.photoUrl?.startsWith("data:")) {
+          await endpoints.communityReportUpload(toReportFormData(payload, form.photoUrl));
+        } else {
+          await endpoints.communityReport(payload);
+        }
         setStatus("Report submitted.");
         await refetchReports();
       } else {
@@ -91,7 +95,12 @@ export function ReportsPage() {
   }
 
   async function verifyReport(id) {
-    await endpoints.verifyReport(id);
+    await endpoints.moderateReport(id, { status: "VERIFIED" });
+    await refetchReports();
+  }
+
+  async function rejectReport(id) {
+    await endpoints.moderateReport(id, { status: "REJECTED" });
     await refetchReports();
   }
 
@@ -124,7 +133,7 @@ export function ReportsPage() {
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
           <div className="border-b border-black/10 p-4"><h2 className="text-sm font-bold">Report List</h2></div>
           <div className="divide-y divide-black/10">
-            {visibleReports.map((report) => <ReportRow key={report.id} report={report} canVerify={canVerify} onVerify={verifyReport} />)}
+            {visibleReports.map((report) => <ReportRow key={report.id} report={report} canVerify={canVerify} onVerify={verifyReport} onReject={rejectReport} />)}
             {!visibleReports.length && <p className="p-6 text-center text-sm text-black/50">No reports returned by the backend for this view.</p>}
           </div>
         </section>
@@ -169,7 +178,7 @@ function Metric({ title, value, tone = "text-black" }) {
   return <article className="rounded-lg border border-black/10 bg-white p-4 shadow-sm"><p className="text-xs font-semibold text-black/55">{title}</p><p className={`mt-2 text-3xl font-bold ${tone}`}>{value}</p></article>;
 }
 
-function ReportRow({ report, canVerify, onVerify }) {
+function ReportRow({ report, canVerify, onVerify, onReject }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <span className={`h-3 w-3 rounded-full ${report.status === "VERIFIED" ? "bg-emerald-500" : report.status === "REJECTED" ? "bg-red-500" : "bg-amber-400"}`} />
@@ -177,7 +186,28 @@ function ReportRow({ report, canVerify, onVerify }) {
         <p className="truncate text-sm font-semibold">{report.description}</p>
         <p className="text-xs text-black/55">{report.districtName || report.district?.name || "Unknown district"} · {report.createdAt ? new Date(report.createdAt).toLocaleString() : "-"}</p>
       </div>
-      {canVerify && report.status !== "VERIFIED" && <button onClick={() => onVerify(report.id)} className="inline-flex items-center gap-1 rounded-md bg-safe px-2 py-1 text-xs font-semibold text-white"><CheckCircle size={13} /> Verify</button>}
+      {canVerify && report.status !== "VERIFIED" && <div className="flex gap-2">
+        <button onClick={() => onVerify(report.id)} className="inline-flex items-center gap-1 rounded-md bg-safe px-2 py-1 text-xs font-semibold text-white"><CheckCircle size={13} /> Verify</button>
+        <button onClick={() => onReject(report.id)} className="rounded-md bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">Reject</button>
+      </div>}
     </div>
   );
+}
+
+function toReportFormData(payload, dataUrl) {
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(payload)) {
+    if (value !== undefined && key !== "photoUrl" && key !== "photoMetadata") formData.append(key, String(value));
+  }
+  formData.append("photo", dataUrlToFile(dataUrl, "report-evidence.jpg"));
+  return formData;
+}
+
+function dataUrlToFile(dataUrl, filename) {
+  const [meta, content] = dataUrl.split(",");
+  const mime = meta.match(/data:(.*);base64/)?.[1] || "image/jpeg";
+  const binary = atob(content);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new File([bytes], filename, { type: mime });
 }

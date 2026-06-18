@@ -10,7 +10,7 @@ const severityTone = {
 };
 
 export function AlertsPage() {
-  const { data } = useQuery({
+  const { data, refetch } = useQuery({
     queryKey: ["alerts-page"],
     queryFn: () => endpoints.alerts({ limit: 50, status: "ACTIVE" }).then((res) => res.data)
   });
@@ -23,6 +23,16 @@ export function AlertsPage() {
     Medium: rows.filter((alert) => alert.severity === "WATCH").length,
     Low: rows.filter((alert) => alert.severity === "NORMAL" || alert.severity === "LOW").length
   };
+
+  async function resolveAlert(id) {
+    await endpoints.resolveAlert(id);
+    await refetch();
+  }
+
+  async function escalateAlert(id) {
+    await endpoints.escalateAlert(id);
+    await refetch();
+  }
 
   return (
     <section className="space-y-4 p-4 lg:p-5">
@@ -39,7 +49,7 @@ export function AlertsPage() {
       <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
         <div className="border-b border-black/10 p-4"><h2 className="font-bold">Recent Alerts</h2></div>
         <table className="w-full text-left text-sm">
-          <thead className="bg-background"><tr><th className="p-3">Alert</th><th>Severity</th><th>Location</th><th>Time</th></tr></thead>
+          <thead className="bg-background"><tr><th className="p-3">Alert</th><th>Severity</th><th>Location</th><th>Time</th><th>Actions</th></tr></thead>
           <tbody>
             {rows.map((alert, index) => {
               const Icon = iconFor(alert.alertType);
@@ -49,10 +59,11 @@ export function AlertsPage() {
                   <td><span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityTone[alert.severity] || severityTone.WATCH}`}>{labelFor(alert.severity)}</span></td>
                   <td>{alert.subDistrict || alert.district?.name}</td>
                   <td>{alert.triggeredAt ? new Date(alert.triggeredAt).toLocaleString() : "-"}</td>
+                  <td className="space-x-2"><button onClick={() => escalateAlert(alert.id)} className="rounded-md bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-700">Escalate</button><button onClick={() => resolveAlert(alert.id)} className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">Resolve</button></td>
                 </tr>
               );
             })}
-            {!rows.length && <tr><td colSpan={4} className="p-6 text-center text-sm text-black/50">No active alerts returned by the backend.</td></tr>}
+            {!rows.length && <tr><td colSpan={5} className="p-6 text-center text-sm text-black/50">No active alerts returned by the backend.</td></tr>}
           </tbody>
         </table>
         <div className="p-4 text-right"><a href="/alerts" className="text-sm font-medium text-blue-600">View all alerts</a></div>

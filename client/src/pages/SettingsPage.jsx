@@ -19,14 +19,24 @@ export function SettingsPage() {
       ...current,
       organizationName: tenant?.name || current.organizationName,
       country: tenant?.country || current.country,
-      defaultDistrict: district?.properties?.name || current.defaultDistrict
+      defaultDistrict: district?.properties?.name || current.defaultDistrict,
+      defaultZoom: tenant?.config?.map?.defaultZoom || current.defaultZoom,
+      temperatureUnit: tenant?.config?.general?.temperatureUnit || current.temperatureUnit
     }));
   }, [tenant?.id, district?.id]);
 
   async function saveSettings(event) {
     event.preventDefault();
     if (tenant?.id) {
-      await endpoints.updateTenant(tenant.id, { name: form.organizationName, country: form.country });
+      await endpoints.updateTenant(tenant.id, {
+        name: form.organizationName,
+        country: form.country,
+        config: {
+          ...(tenant.config || {}),
+          general: { ...((tenant.config || {}).general || {}), temperatureUnit: form.temperatureUnit, defaultDistrict: form.defaultDistrict },
+          map: { ...((tenant.config || {}).map || {}), defaultZoom: Number(form.defaultZoom) }
+        }
+      });
       await refetchTenants();
     }
     setStatus("Settings saved.");

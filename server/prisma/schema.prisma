@@ -15,6 +15,11 @@ enum UserRole {
   community_user
 }
 
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum SensorType {
   GROUNDWATER
   SOIL_MOISTURE
@@ -195,13 +200,17 @@ model User {
   email            String            @unique
   passwordHash     String
   role             UserRole          @default(community_user)
+  status           UserStatus        @default(ACTIVE)
   district         String?
   points           Int               @default(0)
+  lastLoginAt      DateTime?
   createdAt        DateTime          @default(now())
   communityReports CommunityReport[]
+  moderationActions ReportModeration[]
 
   @@index([tenantId])
   @@index([role])
+  @@index([status])
   @@index([district])
 }
 
@@ -603,11 +612,13 @@ model ReportModeration {
   reportId  String          @db.Uuid
   report    CommunityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
   moderatorId String?       @db.Uuid
+  moderator User?           @relation(fields: [moderatorId], references: [id], onDelete: SetNull)
   action    ReportStatus
   notes     String?
   createdAt DateTime        @default(now())
 
   @@index([reportId, createdAt])
+  @@index([moderatorId])
 }
 
 model MessagingConversation {

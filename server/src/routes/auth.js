@@ -24,7 +24,7 @@ router.post("/register", async (req, res, next) => {
       : await prisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
     const user = await prisma.user.create({
       data: { tenantId: tenant?.id, name: input.name, email: input.email, passwordHash, role: input.role, district: input.district },
-      select: { id: true, tenantId: true, name: true, email: true, role: true, district: true, createdAt: true }
+      select: { id: true, tenantId: true, name: true, email: true, role: true, status: true, district: true, lastLoginAt: true, createdAt: true }
     });
     res.status(201).json({ user, token: signToken(user) });
   } catch (err) {
@@ -39,7 +39,9 @@ router.post("/login", async (req, res, next) => {
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
-    const { passwordHash, ...safeUser } = user;
+    if (user.status !== "ACTIVE") return res.status(403).json({ error: "User account is inactive" });
+    const updatedUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    const { passwordHash, ...safeUser } = updatedUser;
     return res.json({ user: safeUser, token: signToken(user) });
   } catch (err) {
     return next(err);

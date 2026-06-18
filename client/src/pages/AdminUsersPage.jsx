@@ -35,6 +35,12 @@ export function AdminUsersPage() {
     await refreshUsers(selectedTenantId);
   }
 
+  async function deactivateUser(userId) {
+    if (!selectedTenantId) return;
+    await endpoints.deactivateTenantUser(selectedTenantId, userId);
+    await refreshUsers(selectedTenantId);
+  }
+
   const stats = useMemo(() => ({
     total: users.length,
     fieldAgents: users.filter((user) => user.role === "field_agent").length,
@@ -67,10 +73,10 @@ export function AdminUsersPage() {
       <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
         <div className="border-b border-black/10 p-4"><h2 className="text-sm font-bold">User Management</h2></div>
         <table className="w-full text-left text-sm">
-          <thead className="bg-background"><tr><th className="p-3">Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th></tr></thead>
+          <thead className="bg-background"><tr><th className="p-3">Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
           <tbody>
-            {users.map((user) => <tr key={user.id} className="border-t border-black/10"><td className="p-3 font-medium">{user.name}</td><td>{user.email}</td><td className="capitalize">{user.role?.replace("_", " ")}</td><td><StatusBadge status={user.status || "ACTIVE"} /></td><td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : "-"}</td></tr>)}
-            {!users.length && <tr><td colSpan={5} className="p-6 text-center text-sm text-black/50">No users returned by the backend.</td></tr>}
+            {users.map((user) => <tr key={user.id} className="border-t border-black/10"><td className="p-3 font-medium">{user.name}</td><td>{user.email}</td><td className="capitalize">{user.role?.replace("_", " ")}</td><td><StatusBadge status={user.status || "ACTIVE"} /></td><td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : "-"}</td><td>{user.status !== "INACTIVE" && <button onClick={() => deactivateUser(user.id)} className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">Deactivate</button>}</td></tr>)}
+            {!users.length && <tr><td colSpan={6} className="p-6 text-center text-sm text-black/50">No users returned by the backend.</td></tr>}
           </tbody>
         </table>
       </section>

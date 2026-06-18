@@ -50,7 +50,7 @@ router.get("/:id/users", authenticate, requireRole("admin"), async (req, res, ne
     const users = await prisma.user.findMany({
       where: { tenantId: req.params.id },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, email: true, role: true, district: true, points: true, createdAt: true }
+      select: { id: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
     });
     res.json(users);
   } catch (err) {
@@ -65,9 +65,45 @@ router.post("/:id/users", authenticate, requireRole("admin"), async (req, res, n
     const passwordHash = await bcrypt.hash(input.password, 12);
     const user = await prisma.user.create({
       data: { tenantId: req.params.id, name: input.name, email: input.email, passwordHash, role: input.role, district: input.district },
-      select: { id: true, name: true, email: true, role: true, district: true, createdAt: true }
+      select: { id: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
     });
     res.status(201).json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/:tenantId/users/:userId", authenticate, requireRole("admin"), async (req, res, next) => {
+  try {
+    if (req.user.tenantId && req.user.tenantId !== req.params.tenantId) return res.status(404).json({ error: "Tenant not found" });
+    const input = userUpdateSchema.parse(req.body);
+    const existing = await prisma.user.findFirst({ where: { id: req.params.userId, tenantId: req.params.tenantId }, select: { id: true } });
+    if (!existing) return res.status(404).json({ error: "User not found" });
+    const data = { ...input };
+    if (input.password) {
+      data.passwordHash = await bcrypt.hash(input.password, 12);
+      delete data.password;
+    }
+    const user = await prisma.user.update({
+      where: { id: req.params.userId },
+      data,
+      select: { id: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
+    });
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:tenantId/users/:userId/deactivate", authenticate, requireRole("admin"), async (req, res, next) => {
+  try {
+    if (req.user.tenantId && req.user.tenantId !== req.params.tenantId) return res.status(404).json({ error: "Tenant not found" });
+    const user = await prisma.user.update({
+      where: { id: req.params.userId },
+      data: { status: "INACTIVE" },
+      select: { id: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
+    });
+    res.json(user);
   } catch (err) {
     next(err);
   }
@@ -88,6 +124,15 @@ const userSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   role: z.enum(["admin", "field_agent", "community_user"]).default("community_user"),
+  district: z.string().optional()
+});
+
+const userUpdateSchema = z.object({
+  name: z.string().min(2).optional(),
+  email: z.string().email().optional(),
+  password: z.string().min(8).optional(),
+  role: z.enum(["admin", "field_agent", "community_user"]).optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
   district: z.string().optional()
 });
 

@@ -38,14 +38,14 @@ router.get("/summary", async (req, res, next) => {
       prisma.district.count({ where: { ...districtWhere, droughtRiskLevel: { in: ["WATCH", "WARNING", "EMERGENCY"] } } })
     ]);
 
-    const riskScore = latestForecast?.riskScore ?? 0.78;
-    const riskLabel = latestForecast?.riskLabel || (riskScore >= 0.75 ? "HIGH" : riskScore >= 0.5 ? "HIGH" : "MODERATE");
+    const riskScore = latestForecast?.riskScore ?? 0;
+    const riskLabel = latestForecast?.riskLabel || (riskScore >= 0.75 ? "HIGH" : riskScore >= 0.5 ? "WARNING" : riskScore > 0 ? "WATCH" : "UNKNOWN");
 
     res.json({
-      waterSources: { total: waterSourcesTotal || 124, active: waterSourcesActive || 98 },
-      sensors: { total: sensorsTotal || 26, online: sensorsOnline || 22 },
+      waterSources: { total: waterSourcesTotal, active: waterSourcesActive },
+      sensors: { total: sensorsTotal, online: sensorsOnline },
       droughtRisk: { level: riskLabel.toUpperCase().replace(" RISK", ""), score: riskScore },
-      alertsToday: alertsToday || 18,
+      alertsToday,
       activeAlerts,
       sensorsOnline,
       districtsAtRisk,

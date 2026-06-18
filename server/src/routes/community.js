@@ -46,6 +46,36 @@ router.get("/reports", async (req, res, next) => {
   }
 });
 
+router.get("/reports/:id", async (req, res, next) => {
+  try {
+    const [report] = await prisma.$queryRaw`
+      SELECT cr.id, cr."userId", cr."districtId", cr."waterLevel", cr.description, cr."photoUrl",
+        cr."photoMetadata", cr."gpsAccuracyMeters", cr.source, cr."externalReporterPhone", cr.status, cr."createdAt",
+        u.name AS "userName", d.name AS "districtName", ST_AsGeoJSON(cr.location)::json AS location
+      FROM "CommunityReport" cr
+      LEFT JOIN "User" u ON u.id = cr."userId"
+      LEFT JOIN "District" d ON d.id = cr."districtId"
+      WHERE cr.id = ${req.params.id}::uuid
+        AND (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid OR u."tenantId" = ${req.tenantId || null}::uuid)
+    `;
+    if (!report) return res.status(404).json({ error: "Report not found" });
+    const moderationActions = await prisma.reportModeration.findMany({
+      where: { reportId: req.params.id },
+      orderBy: { createdAt: "desc" },
+      include: { moderator: { select: { id: true, name: true, email: true } } }
+    });
+    res.json({
+      ...report,
+      reporterName: report.userName || report.externalReporterPhone || "Community reporter",
+      timeAgo: timeAgo(report.createdAt),
+      severityColor: severityColor(report.waterLevel, report.status),
+      moderationActions
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/report", authenticate, async (req, res, next) => {
   try {
     const input = z.object({

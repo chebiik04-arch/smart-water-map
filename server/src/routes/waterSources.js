@@ -114,6 +114,56 @@ router.post("/", authenticate, requireRole("admin", "field_agent"), async (req, 
   }
 });
 
+router.patch("/:id", authenticate, requireRole("admin", "field_agent"), async (req, res, next) => {
+  try {
+    const input = sourceUpdateSchema.parse(req.body);
+    const existing = await prisma.waterSource.findFirst({
+      where: { id: req.params.id, district: req.user.tenantId ? { tenantId: req.user.tenantId } : {} },
+      select: { id: true }
+    });
+    if (!existing) return res.status(404).json({ error: "Water source not found" });
+    const data = {};
+    for (const key of ["name", "type", "status", "depth", "yield", "lastInspected"]) {
+      if (input[key] !== undefined) data[key] = key === "lastInspected" && input[key] ? new Date(input[key]) : input[key];
+    }
+    if (input.latitude !== undefined && input.longitude !== undefined) {
+      const [updated] = await prisma.$queryRaw`
+        UPDATE "WaterSource"
+        SET name = COALESCE(${input.name || null}, name),
+          type = COALESCE(${input.type || null}::"WaterSourceType", type),
+          status = COALESCE(${input.status || null}::"SourceStatus", status),
+          depth = COALESCE(${input.depth ?? null}, depth),
+          yield = COALESCE(${input.yield ?? null}, yield),
+          "lastInspected" = COALESCE(${input.lastInspected ? new Date(input.lastInspected) : null}, "lastInspected"),
+          location = ST_SetSRID(ST_MakePoint(${input.longitude}, ${input.latitude}), 4326)
+        WHERE id = ${req.params.id}::uuid
+        RETURNING id, name, type, status, depth, yield, "lastInspected", "districtId", ST_AsGeoJSON(location)::json AS location
+      `;
+      emitWaterSourceUpdate(updated);
+      return res.json(updated);
+    }
+    const source = await prisma.waterSource.update({ where: { id: req.params.id }, data });
+    emitWaterSourceUpdate(source);
+    res.json(source);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/:id", authenticate, requireRole("admin"), async (req, res, next) => {
+  try {
+    const existing = await prisma.waterSource.findFirst({
+      where: { id: req.params.id, district: req.user.tenantId ? { tenantId: req.user.tenantId } : {} },
+      select: { id: true }
+    });
+    if (!existing) return res.status(404).json({ error: "Water source not found" });
+    await prisma.waterSource.delete({ where: { id: req.params.id } });
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/:id/reading", authenticate, requireRole("admin", "field_agent"), async (req, res, next) => {
   try {
     const input = readingSchema.parse(req.body);
@@ -149,6 +199,8 @@ const sourceSchema = z.object({
   yield: z.number().optional(),
   lastInspected: z.string().datetime().optional()
 });
+
+const sourceUpdateSchema = sourceSchema.partial().omit({ districtId: true });
 
 const readingSchema = z.object({
   waterLevel: z.number(),
