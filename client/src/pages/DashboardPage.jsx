@@ -147,25 +147,25 @@ export function DashboardPage() {
       return {
         summary: summaryRes.status === "fulfilled" ? summaryRes.value.data : {},
         districts: districtRes.status === "fulfilled" ? districtRes.value.data : fallbackDistrict,
-        sensors: sensorRes.status === "fulfilled" ? sensorRes.value.data : [],
-        alerts: alertRes.status === "fulfilled" ? alertRes.value.data : [],
-        reports: reportRes.status === "fulfilled" ? reportRes.value.data : [],
-        boreholes: boreholeRes.status === "fulfilled" ? boreholeRes.value.data : []
+        sensors: asArray(sensorRes.status === "fulfilled" ? sensorRes.value.data : []),
+        alerts: asArray(alertRes.status === "fulfilled" ? alertRes.value.data : []),
+        reports: asArray(reportRes.status === "fulfilled" ? reportRes.value.data : []),
+        boreholes: asArray(boreholeRes.status === "fulfilled" ? boreholeRes.value.data : [])
       };
     }
   });
 
   const summary = dashboardData.summary || {};
   const districts = dashboardData.districts || fallbackDistrict;
-  const sensors = dashboardData.sensors || [];
-  const alerts = dashboardData.alerts || [];
-  const reports = dashboardData.reports || [];
-  const boreholes = dashboardData.boreholes || [];
+  const sensors = asArray(dashboardData.sensors);
+  const alerts = asArray(dashboardData.alerts);
+  const reports = asArray(dashboardData.reports);
+  const boreholes = asArray(dashboardData.boreholes);
   const onlineSensors = sensors.filter((sensor) => sensor.status === "ONLINE").length || summary.sensors?.online || summary.sensorsOnline || 22;
   const waterSourceTotal = summary.waterSources?.total || Math.max(124, boreholes.length + reports.length + 98);
   const activeWaterSources = summary.waterSources?.active || Math.max(98, boreholes.filter((item) => item.status === "FUNCTIONAL").length + 96);
   const alertCount = summary.alertsToday || alerts.length || summary.activeAlerts || 18;
-  const recentReports = reports.length ? reports : summary.recentCommunityReports || [];
+  const recentReports = reports.length ? reports : asArray(summary.recentCommunityReports);
   const riskLevel = summary.droughtRisk?.level || (alertCount > 10 || summary.districtsAtRisk ? "HIGH" : "MODERATE");
   const droughtScore = summary.droughtRisk?.score || (riskLevel === "HIGH" ? 0.78 : 0.54);
   const mapPoints = useMemo(() => buildMapPoints({ sensors, reports, boreholes }), [sensors, reports, boreholes]);
@@ -501,6 +501,18 @@ function pointStyle(type) {
 
 function toggleLayer(setLayers, key) {
   setLayers((current) => ({ ...current, [key]: !current[key] }));
+}
+
+function asArray(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.results)) return value.results;
+  if (Array.isArray(value?.reports)) return value.reports;
+  if (Array.isArray(value?.alerts)) return value.alerts;
+  if (Array.isArray(value?.sensors)) return value.sensors;
+  if (Array.isArray(value?.boreholes)) return value.boreholes;
+  return [];
 }
 
 function basemapSwatch(item) {
