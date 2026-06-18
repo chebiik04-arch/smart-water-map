@@ -11,31 +11,25 @@ export function DroughtForecastGauge({ districtId }) {
     enabled: Boolean(districtId)
   });
   const pct = Math.round((data.riskScore || 0) * 100);
-  const angle = -90 + pct * 1.8;
+  const riskLabel = data.riskLabel || (pct >= 76 ? "Emergency" : pct >= 51 ? "High Risk" : pct >= 31 ? "Watch" : "Normal");
   return (
     <section className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
       <h2 className="text-sm font-bold">AI Drought Forecast <span className="text-xs font-medium">(Next 30 Days)</span></h2>
-      <div className="mt-4 grid grid-cols-[8rem_1fr] gap-4">
-        <div className="relative h-32">
-          <svg viewBox="0 0 160 100" className="h-full w-full">
-            <path d="M20 80 A60 60 0 0 1 140 80" fill="none" stroke="#E5E7EB" strokeWidth="16" strokeLinecap="round" />
-            <path d="M20 80 A60 60 0 0 1 56 24" fill="none" stroke="#22C55E" strokeWidth="16" strokeLinecap="round" />
-            <path d="M56 24 A60 60 0 0 1 98 24" fill="none" stroke="#F59E0B" strokeWidth="16" strokeLinecap="round" />
-            <path d="M98 24 A60 60 0 0 1 128 50" fill="none" stroke="#E07B00" strokeWidth="16" strokeLinecap="round" />
-            <path d="M128 50 A60 60 0 0 1 140 80" fill="none" stroke="#C0392B" strokeWidth="16" strokeLinecap="round" />
-            <line x1="80" y1="80" x2="80" y2="28" stroke="#111827" strokeWidth="3" strokeLinecap="round" transform={`rotate(${angle} 80 80)`} />
-            <circle cx="80" cy="80" r="5" fill="#111827" />
-          </svg>
-          <div className="absolute inset-x-0 bottom-0 text-center">
-            <p className="text-3xl font-bold">{pct}%</p>
-            <p className="text-xs font-bold text-red-500">{data.riskLabel}</p>
+      <div className="mt-4 grid gap-5 sm:grid-cols-[11rem_1fr]">
+        <div className="relative mx-auto h-44 w-44 sm:mx-0">
+          <div className="absolute inset-0 rounded-full bg-[conic-gradient(#EF4444_0_78%,#E5E7EB_78%_100%)]" />
+          <div className="absolute inset-[24px] grid place-items-center rounded-full bg-white text-center">
+            <div>
+              <p className="text-5xl font-bold leading-none">{pct}%</p>
+              <p className="mt-2 text-xs font-bold text-red-500">{riskLabel}</p>
+            </div>
           </div>
         </div>
-        <div className="text-xs">
+        <div className="text-sm">
           <p className="font-bold">Drivers</p>
           {data.drivers?.map((driver) => {
             const Icon = driver.direction === "UP" ? ArrowUp : ArrowDown;
-            return <p key={driver.factor} className="mt-1 flex items-center gap-1 text-black/65"><Icon size={12} className={driver.direction === "UP" ? "text-red-500" : "text-green-600"} />{driver.factor}</p>;
+            return <p key={driver.factor} className="mt-2 flex items-center gap-2 text-black/65"><Icon size={13} className={driver.direction === "UP" ? "text-red-500" : "text-green-600"} />{driver.factor}</p>;
           })}
           <p className="mt-3 font-bold text-emerald-700">Recommendation</p>
           <ul className="mt-1 space-y-1 text-black/65">
