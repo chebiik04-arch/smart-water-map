@@ -45,6 +45,7 @@ test("renders map layers with mocked GIS APIs", async ({ page }) => {
 test("queues a report when offline", async ({ page, context }) => {
   await loginByStorage(page, "/reports");
   await context.setOffline(true);
+  await page.getByRole("button", { name: /add report/i }).click();
   await page.getByPlaceholder("Latitude").fill("-1.8");
   await page.getByPlaceholder("Longitude").fill("37.6");
   await page.getByPlaceholder(/water level/i).fill("22");

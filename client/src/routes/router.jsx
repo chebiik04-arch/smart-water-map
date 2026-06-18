@@ -16,6 +16,7 @@ import { DeveloperPortalPage } from "../pages/DeveloperPortalPage";
 import { AdvisoryPage } from "../pages/AdvisoryPage";
 import { WaterMap } from "../pages/WaterMap";
 import { WaterSources } from "../pages/WaterSources";
+import { SettingsPage } from "../pages/SettingsPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -37,7 +38,8 @@ export const router = createBrowserRouter([
           { path: "/reports", element: <ReportsPage /> },
           { path: "/forecasts", element: <ForecastsPage /> },
           { path: "/advisory", element: <AdvisoryPage /> },
-          { path: "/simulations", element: <SimulationsPage /> }
+          { path: "/simulations", element: <SimulationsPage /> },
+          { path: "/settings", element: <SettingsPage /> }
         ]
       }
     ]

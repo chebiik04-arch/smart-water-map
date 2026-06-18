@@ -1,57 +1,97 @@
-import { useEffect, useState } from "react";
-import { KeyRound, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
+import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import { endpoints } from "../services/api";
+import { asArray } from "../utils/apiData";
 
 export function DeveloperPortalPage() {
-  const [portal, setPortal] = useState(null);
-  const [keys, setKeys] = useState([]);
-  const [usage, setUsage] = useState([]);
-  const [createdKey, setCreatedKey] = useState("");
-  const [form, setForm] = useState({ name: "Research partner", ownerEmail: "researcher@example.org", quotaPerHour: 250 });
+  const [tab, setTab] = useState("annual");
+  const { data: districts } = useQuery({ queryKey: ["reports-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
+  const districtId = districts?.features?.[0]?.id;
+  const { data: report } = useQuery({
+    queryKey: ["reports-export", districtId],
+    queryFn: () => endpoints.exportReport(districtId ? { districtId } : undefined).then((res) => res.data),
+    enabled: Boolean(districts)
+  });
 
-  useEffect(() => { refresh(); }, []);
+  const summary = report?.summary || {};
+  const topWaterSources = asArray(report?.topWaterSources);
+  const activeAlerts = asArray(report?.activeAlerts);
+  const rainfall = asArray(report?.rainfall);
+  const chartData = useMemo(() => [
+    { name: "Water Sources", value: summary.waterSources?.total || 0 },
+    { name: "Active", value: summary.waterSources?.active || 0 },
+    { name: "Sensors", value: summary.sensors?.total || 0 },
+    { name: "Online", value: summary.sensors?.online || 0 }
+  ], [summary]);
 
-  async function refresh() {
-    const [portalRes, keysRes, usageRes] = await Promise.all([endpoints.developerPortal(), endpoints.apiKeys(), endpoints.apiUsage()]);
-    setPortal(portalRes.data);
-    setKeys(keysRes.data);
-    setUsage(usageRes.data);
-  }
-
-  async function createKey(event) {
-    event.preventDefault();
-    const { data } = await endpoints.createApiKey({ ...form, quotaPerHour: Number(form.quotaPerHour) });
-    setCreatedKey(data.key);
-    await refresh();
+  function downloadJson() {
+    const blob = new Blob([JSON.stringify(report || {}, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `smart-water-report-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
-    <section className="space-y-4 p-4 lg:p-6">
-      <div><h1 className="text-2xl font-semibold">Developer Portal</h1><p className="text-sm text-black/60">Research API keys, quotas, and usage</p></div>
-      <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
-        <form onSubmit={createKey} className="space-y-3 rounded-lg border border-black/10 bg-white p-4 shadow-panel">
-          <div className="flex items-center gap-2 text-primary"><KeyRound size={18} /><h2 className="font-semibold">Issue API key</h2></div>
-          <input className="w-full rounded-md border border-black/15 px-3 py-2" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input className="w-full rounded-md border border-black/15 px-3 py-2" value={form.ownerEmail} onChange={(e) => setForm({ ...form, ownerEmail: e.target.value })} />
-          <input type="number" className="w-full rounded-md border border-black/15 px-3 py-2" value={form.quotaPerHour} onChange={(e) => setForm({ ...form, quotaPerHour: e.target.value })} />
-          <button className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 font-semibold text-white"><Plus size={16} /> Create key</button>
-          {createdKey && <code className="block break-all rounded-md bg-background p-3 text-xs">{createdKey}</code>}
-        </form>
-        <div className="space-y-4">
-          <div className="rounded-lg border border-black/10 bg-white p-4 shadow-panel">
-            <h2 className="font-semibold">{portal?.title}</h2>
-            <p className="mt-1 text-sm text-black/60">{portal?.authentication}</p>
-            <div className="mt-3 grid gap-2 md:grid-cols-3">{portal?.endpoints?.map((endpoint) => <code key={endpoint} className="rounded-md bg-background p-2 text-xs">{endpoint}</code>)}</div>
-          </div>
-          <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-panel">
-            <table className="w-full text-left text-sm"><thead className="bg-background"><tr><th className="p-3">Key</th><th>Owner</th><th>Quota/hr</th><th>Status</th></tr></thead><tbody>{keys.map((key) => <tr key={key.id} className="border-t border-black/10"><td className="p-3">{key.name} · {key.keyPrefix}</td><td>{key.ownerEmail}</td><td>{key.quotaPerHour}</td><td>{key.status}</td></tr>)}</tbody></table>
-          </div>
-          <div className="rounded-lg border border-black/10 bg-white p-4 shadow-panel">
-            <h2 className="mb-2 font-semibold">Recent usage</h2>
-            <div className="space-y-2">{usage.slice(0, 8).map((item) => <p key={item.id} className="text-sm"><span className="font-medium">{item.apiKey.name}</span> hit <code>{item.route}</code></p>)}</div>
-          </div>
+    <section className="space-y-4 p-4 lg:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">Reports</h1>
+          <p className="text-sm text-black/55">Makueni County summary exports</p>
         </div>
+        <button onClick={downloadJson} className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"><Download size={15} /> Download Report</button>
+      </div>
+
+      <div className="flex gap-2 rounded-lg border border-black/10 bg-white p-1 shadow-sm">
+        <Tab active={tab === "annual"} onClick={() => setTab("annual")}>Annual Report</Tab>
+        <Tab active={tab === "monthly"} onClick={() => setTab("monthly")}>Monthly Report</Tab>
+        <Tab active={tab === "custom"} onClick={() => setTab("custom")}>Custom Date Range</Tab>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[20rem_minmax(0,1fr)_22rem]">
+        <section className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-bold">Summary</h2>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <MiniStat label="Water Sources" value={summary.waterSources?.total || 0} />
+            <MiniStat label="Active Sources" value={summary.waterSources?.active || 0} />
+            <MiniStat label="Sensors" value={summary.sensors?.total || 0} />
+            <MiniStat label="Online" value={summary.sensors?.online || 0} />
+          </div>
+          <div className="mt-4 h-28">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <XAxis dataKey="name" hide />
+                <Bar dataKey="value" fill="#2D8CFF" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm xl:col-span-2">
+          <div className="border-b border-black/10 p-4"><h2 className="text-sm font-bold">Detailed Report</h2></div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-background"><tr><th className="p-3">Category</th><th>Details</th><th>Status</th><th>Updated</th></tr></thead>
+            <tbody>
+              {topWaterSources.map((source) => <tr key={source.id} className="border-t border-black/10"><td className="p-3 font-medium">{source.type}</td><td>{source.name}</td><td>{source.status}</td><td>{source.lastInspected ? new Date(source.lastInspected).toLocaleDateString() : "-"}</td></tr>)}
+              {activeAlerts.map((alert) => <tr key={alert.id} className="border-t border-black/10"><td className="p-3 font-medium">Alert</td><td>{alert.message}</td><td>{alert.severity}</td><td>{alert.triggeredAt ? new Date(alert.triggeredAt).toLocaleDateString() : "-"}</td></tr>)}
+              {rainfall.map((row) => <tr key={row.id || row.month} className="border-t border-black/10"><td className="p-3 font-medium">Rainfall</td><td>{row.month}</td><td>{row.mmTotal} mm</td><td>-</td></tr>)}
+              {!topWaterSources.length && !activeAlerts.length && !rainfall.length && <tr><td colSpan={4} className="p-6 text-center text-sm text-black/50">No report rows returned by the backend.</td></tr>}
+            </tbody>
+          </table>
+        </section>
       </div>
     </section>
   );
+}
+
+function Tab({ active, onClick, children }) {
+  return <button onClick={onClick} className={`rounded-md px-4 py-2 text-sm font-semibold ${active ? "bg-emerald-700 text-white" : "text-black/65 hover:bg-black/[0.03]"}`}>{children}</button>;
+}
+
+function MiniStat({ label, value }) {
+  return <div><p className="text-xs text-black/50">{label}</p><p className="text-2xl font-bold">{value}</p></div>;
 }

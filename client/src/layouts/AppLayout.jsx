@@ -37,7 +37,7 @@ const links = [
   { to: "/reports", label: "Community Reports", icon: Users },
   { to: "/developers", label: "Reports", icon: FileText, admin: true },
   { to: "/admin/users", label: "Users", icon: Users, admin: true },
-  { to: "/settings", label: "Settings", icon: Settings, disabled: true }
+  { to: "/settings", label: "Settings", icon: Settings }
 ];
 
 const pageTitles = {
@@ -53,7 +53,8 @@ const pageTitles = {
   "/advisory": "Water Sources",
   "/simulations": "Drought Forecast",
   "/developers": "Reports",
-  "/admin/users": "Users"
+  "/admin/users": "Users",
+  "/settings": "Settings"
 };
 
 export function AppLayout() {
