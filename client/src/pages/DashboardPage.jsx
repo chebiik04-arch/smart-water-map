@@ -6,11 +6,16 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUp,
+  ChevronDown,
   CloudRain,
   Droplet,
-  Layers,
+  FileDown,
+  MapPin,
+  MousePointer2,
+  Ruler,
   Sprout,
   TrendingUp,
+  Upload,
   Waves,
   Wifi
 } from "lucide-react";
@@ -115,6 +120,8 @@ const riskColors = {
 
 export function DashboardPage() {
   const [activeBasemap, setActiveBasemap] = useState("OpenStreetMap");
+  const [basemapsCollapsed, setBasemapsCollapsed] = useState(false);
+  const [layersCollapsed, setLayersCollapsed] = useState(false);
   const [layers, setLayers] = useState({
     boreholes: true,
     water: true,
@@ -165,42 +172,77 @@ export function DashboardPage() {
 
   return (
     <section className="space-y-4 bg-[#F5F6F4] p-4 text-[#17201d] lg:p-5">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard title="Water Sources" value={waterSourceTotal} subtext={`Active: ${activeWaterSources}`} icon={Droplet} iconClass="bg-blue-500 text-white" />
         <MetricCard title="Active Sensors" value={summary.sensors?.total || summary.sensorsOnline || onlineSensors} subtext={`Online: ${onlineSensors}`} icon={Wifi} iconClass="bg-emerald-100 text-emerald-700" />
         <MetricCard title="Drought Risk Level" value={riskLevel} subtext={`Score: ${droughtScore.toFixed(2)}`} icon={TrendingUp} danger />
         <MetricCard title="Alerts (Today)" value={alertCount} subtext="View all alerts" compact />
+        <MetricCard title="Export Report" value="PDF" subtext="County summary" icon={FileDown} iconClass="bg-primary text-white" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-h-[430px] overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
-          <div className="relative h-full min-h-[430px]">
-            <DashboardMap districts={districts} points={mapPoints} layers={layers} />
-            <div className="absolute left-4 top-4 z-[500] rounded-lg bg-white/95 px-4 py-3 shadow-sm">
-              <h1 className="text-lg font-bold">Makueni County</h1>
-              <span className="mt-3 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Study Area</span>
+        <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
+          <div className="grid min-h-[390px] grid-cols-1 bg-white xl:grid-cols-[17rem_minmax(0,1fr)_16rem]">
+            <aside className="z-[500] border-b border-black/10 bg-white/95 p-4 xl:border-b-0 xl:border-r">
+              <h1 className="text-xl font-bold leading-tight">Makueni County</h1>
+              <p className="mt-1 text-sm text-black/60">County shapefile / selected AOI</p>
+
+              <label className="mt-4 block text-sm font-semibold">
+                County, shapefile or AOI
+                <select className="mt-2 w-full rounded-md border border-black/15 bg-white px-3 py-2 text-sm">
+                  <option>Makueni County shapefile</option>
+                  <option>Select another county</option>
+                  <option>Upload shapefile</option>
+                  <option>Draw desired AOI</option>
+                </select>
+              </label>
+
+              <div className="mt-4 rounded-md border border-dashed border-primary/35 bg-primary/5 p-3">
+                <p className="text-sm font-bold text-primary">Study area</p>
+                <p className="mt-1 text-sm text-black/65">Placeholder for selected county boundary, uploaded shapefile, or drawn area of interest.</p>
+              </div>
+
+              <div className="mt-4">
+                <p className="text-sm font-bold">Map tools</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <ToolButton icon={MousePointer2} label="Select" />
+                  <ToolButton icon={MapPin} label="Pin" />
+                  <ToolButton icon={Ruler} label="Measure" />
+                  <ToolButton icon={Upload} label="Upload" />
+                </div>
+              </div>
+            </aside>
+
+            <div className="relative min-h-[390px]">
+              <DashboardMap districts={districts} points={mapPoints} layers={layers} activeBasemap={activeBasemap} />
+              <div className="absolute bottom-4 left-4 z-[500] rounded-md border border-black/20 bg-white/95 px-3 py-2 shadow-sm">
+                <div className="h-1 w-24 border-x-2 border-b-2 border-black" />
+                <p className="mt-1 text-xs font-semibold text-black/70">0 5 10 km</p>
+              </div>
             </div>
-            <div className="absolute right-4 top-4 z-[500] w-44 rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
-              <PanelTitle title="Basemap" />
-              {["OpenStreetMap", "Satellite", "Terrain", "Dark Map"].map((item) => (
-                <button key={item} onClick={() => setActiveBasemap(item)} className="mt-2 flex w-full items-center gap-2 text-left text-xs">
-                  <span className={`h-7 w-7 rounded bg-cover ${basemapSwatch(item)}`} />
-                  <span className="flex-1">{item}</span>
-                  <span className={`h-3 w-3 rounded-full border ${activeBasemap === item ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} />
-                </button>
-              ))}
-            </div>
-            <div className="absolute bottom-4 right-4 z-[500] w-48 rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
-              <PanelTitle title="Layers" />
-              <LayerToggle label="Boreholes" color="bg-blue-500" checked={layers.boreholes} onChange={() => toggleLayer(setLayers, "boreholes")} />
-              <LayerToggle label="Water Points" color="bg-emerald-600" checked={layers.water} onChange={() => toggleLayer(setLayers, "water")} />
-              <LayerToggle label="Sensors" color="bg-violet-500" checked={layers.sensors} onChange={() => toggleLayer(setLayers, "sensors")} />
-              <LayerToggle label="Drought Hotspots" color="bg-orange-500" checked={layers.hotspots} onChange={() => toggleLayer(setLayers, "hotspots")} />
-              <LayerToggle label="Rainfall (CHIRPS)" icon={CloudRain} checked={layers.rainfall} onChange={() => toggleLayer(setLayers, "rainfall")} />
-              <LayerToggle label="NDVI (Sentinel-2)" icon={Sprout} checked={layers.ndvi} onChange={() => toggleLayer(setLayers, "ndvi")} />
-              <LayerToggle label="Soil Moisture (SMAP)" icon={Waves} checked={layers.soil} onChange={() => toggleLayer(setLayers, "soil")} />
-              <LayerToggle label="Community Reports" icon={AlertTriangle} checked={layers.reports} onChange={() => toggleLayer(setLayers, "reports")} />
-            </div>
+
+            <aside className="z-[500] space-y-3 border-t border-black/10 bg-white/95 p-4 xl:border-l xl:border-t-0">
+              <CollapsiblePanel title="Basemaps" collapsed={basemapsCollapsed} onToggle={() => setBasemapsCollapsed((value) => !value)}>
+                {["OpenStreetMap", "Satellite", "Terrain", "Dark Map"].map((item) => (
+                  <button key={item} onClick={() => setActiveBasemap(item)} className="mt-2 flex w-full items-center gap-3 rounded-md border border-black/10 p-2 text-left text-sm hover:bg-black/[0.03]">
+                    <span className={`h-9 w-11 shrink-0 rounded bg-cover ${basemapSwatch(item)}`} />
+                    <span className="flex-1 font-medium">{item}</span>
+                    <span className={`h-3.5 w-3.5 rounded-full border ${activeBasemap === item ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} />
+                  </button>
+                ))}
+              </CollapsiblePanel>
+
+              <CollapsiblePanel title="Layers" collapsed={layersCollapsed} onToggle={() => setLayersCollapsed((value) => !value)}>
+                <LayerToggle label="Boreholes" color="bg-blue-500" checked={layers.boreholes} onChange={() => toggleLayer(setLayers, "boreholes")} />
+                <LayerToggle label="Water Points" color="bg-emerald-600" checked={layers.water} onChange={() => toggleLayer(setLayers, "water")} />
+                <LayerToggle label="Sensors" color="bg-violet-500" checked={layers.sensors} onChange={() => toggleLayer(setLayers, "sensors")} />
+                <LayerToggle label="Drought Hotspots" color="bg-orange-500" checked={layers.hotspots} onChange={() => toggleLayer(setLayers, "hotspots")} />
+                <LayerToggle label="Rainfall (CHIRPS)" icon={CloudRain} checked={layers.rainfall} onChange={() => toggleLayer(setLayers, "rainfall")} />
+                <LayerToggle label="NDVI (Sentinel-2)" icon={Sprout} checked={layers.ndvi} onChange={() => toggleLayer(setLayers, "ndvi")} />
+                <LayerToggle label="Soil Moisture (SMAP)" icon={Waves} checked={layers.soil} onChange={() => toggleLayer(setLayers, "soil")} />
+                <LayerToggle label="Community Reports" icon={AlertTriangle} checked={layers.reports} onChange={() => toggleLayer(setLayers, "reports")} />
+              </CollapsiblePanel>
+            </aside>
           </div>
         </div>
 
@@ -232,7 +274,7 @@ export function DashboardPage() {
         </aside>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-4">
+      <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.25fr]">
         <ChartCard title="Rainfall Trend (Last 6 Months)">
           <ResponsiveContainer width="100%" height={150}>
             <BarChart data={rainfallTrend}>
@@ -274,12 +316,12 @@ export function DashboardPage() {
   );
 }
 
-function DashboardMap({ districts, points, layers }) {
+function DashboardMap({ districts, points, layers, activeBasemap }) {
   return (
-    <MapContainer center={mapCenter} zoom={9} minZoom={7} zoomControl className="z-0">
+    <MapContainer center={mapCenter} zoom={9} minZoom={7} zoomControl className="z-0 h-full min-h-[390px]">
       <TileLayer
-        attribution="&copy; OpenStreetMap contributors"
-        url={import.meta.env.VITE_MAP_TILE_URL || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"}
+        attribution={basemapAttribution(activeBasemap)}
+        url={basemapUrl(activeBasemap)}
       />
       {layers.ndvi && (
         <GeoJSON
@@ -362,11 +404,11 @@ function ForecastCard() {
   return (
     <section className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
       <h2 className="text-sm font-bold">AI Drought Forecast <span className="text-xs font-medium">(Next 30 Days)</span></h2>
-      <div className="mt-4 grid grid-cols-[8rem_1fr] gap-4">
-        <div className="relative h-32">
+      <div className="mt-4 grid grid-cols-[9rem_1fr] gap-5">
+        <div className="relative h-36">
           <div className="absolute inset-0 rounded-full bg-[conic-gradient(#EF4444_0_78%,#E5E7EB_78%_100%)]" />
-          <div className="absolute inset-[18px] grid place-items-center rounded-full bg-white text-center">
-            <p className="text-3xl font-bold">78%</p>
+          <div className="absolute inset-[20px] grid place-items-center rounded-full bg-white text-center">
+            <p className="text-4xl font-bold">78%</p>
             <p className="text-xs font-bold text-red-500">High Risk</p>
           </div>
         </div>
@@ -395,7 +437,7 @@ function ChartCard({ title, children }) {
 
 function LayerToggle({ label, color, icon: Icon, checked, onChange }) {
   return (
-    <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs">
+    <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-sm">
       <input type="checkbox" checked={checked} onChange={onChange} className="h-3.5 w-3.5 accent-emerald-700" />
       {color ? <span className={`h-3 w-3 rounded-full ${color}`} /> : <Icon size={13} className="text-emerald-700" />}
       <span>{label}</span>
@@ -403,12 +445,24 @@ function LayerToggle({ label, color, icon: Icon, checked, onChange }) {
   );
 }
 
-function PanelTitle({ title }) {
+function CollapsiblePanel({ title, collapsed, onToggle, children }) {
   return (
-    <div className="flex items-center justify-between text-xs font-bold">
-      <span>{title}</span>
-      <Layers size={14} />
-    </div>
+    <section className="rounded-lg border border-black/10 bg-white p-3 shadow-sm">
+      <button type="button" onClick={onToggle} className="flex w-full items-center justify-between text-sm font-bold">
+        <span>{title}</span>
+        <ChevronDown size={16} className={`transition ${collapsed ? "-rotate-90" : ""}`} />
+      </button>
+      {!collapsed && <div className="mt-2">{children}</div>}
+    </section>
+  );
+}
+
+function ToolButton({ icon: Icon, label }) {
+  return (
+    <button type="button" className="flex items-center gap-2 rounded-md border border-black/10 bg-white px-2 py-2 text-sm font-medium hover:bg-black/[0.03]">
+      <Icon size={15} className="text-primary" />
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -451,11 +505,25 @@ function toggleLayer(setLayers, key) {
 
 function basemapSwatch(item) {
   return {
-    OpenStreetMap: "bg-[linear-gradient(135deg,#dfe8d1,#f5efe2)]",
-    Satellite: "bg-[linear-gradient(135deg,#324b2f,#b5c49c)]",
-    Terrain: "bg-[linear-gradient(135deg,#d7d0ba,#71846b)]",
-    "Dark Map": "bg-[linear-gradient(135deg,#111827,#4b5563)]"
+    OpenStreetMap: "bg-[linear-gradient(135deg,#e8efe1_0_35%,#f7f1df_35%_55%,#b8d7ef_55%_100%)]",
+    Satellite: "bg-[radial-gradient(circle_at_30%_30%,#789168,#263e28_46%,#102417)]",
+    Terrain: "bg-[linear-gradient(135deg,#e4d9bd,#8ba06f_45%,#6f5f42)]",
+    "Dark Map": "bg-[linear-gradient(135deg,#0f172a,#1f2937_50%,#111827)]"
   }[item];
+}
+
+function basemapUrl(item) {
+  if (item === "Satellite") return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+  if (item === "Terrain") return "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
+  if (item === "Dark Map") return "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+  return import.meta.env.VITE_MAP_TILE_URL || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+}
+
+function basemapAttribution(item) {
+  if (item === "Satellite") return "Tiles &copy; Esri";
+  if (item === "Terrain") return "Map data &copy; OpenTopoMap contributors";
+  if (item === "Dark Map") return "&copy; OpenStreetMap contributors &copy; CARTO";
+  return "&copy; OpenStreetMap contributors";
 }
 
 function formatDate(value) {
