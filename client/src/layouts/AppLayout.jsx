@@ -24,6 +24,7 @@ import { useLanguageStore } from "../stores/languageStore";
 import { languages } from "../i18n/translations";
 import { WeatherWidget } from "../components/layout/WeatherWidget";
 import { endpoints } from "../services/api";
+import { usePlatformSettings } from "../hooks/usePlatformSettings";
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
@@ -64,9 +65,12 @@ export function AppLayout() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { data: districts } = useQuery({ queryKey: ["layout-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
+  const { data: settings } = usePlatformSettings();
   const visibleLinks = links.filter((link) => !link.admin || user?.role === "admin");
   const title = pageTitles[location.pathname] || "Dashboard";
-  const districtName = districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
+  const districtName = settings?.general?.defaultDistrict || districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
+  const organizationName = settings?.organizationName || "Smart Water";
+  const country = settings?.country || "Kenya";
   const displayName = user?.name || user?.email || "User";
   const role = user?.role ? user.role.replace("_", " ") : "County Officer";
 
@@ -78,7 +82,7 @@ export function AppLayout() {
             <Droplet className="fill-blue-400 text-blue-400" size={23} />
           </span>
           <span>
-            <span className="block text-sm font-bold leading-tight">Smart Water</span>
+            <span className="block text-sm font-bold leading-tight">{organizationName}</span>
             <span className="block text-[10px] text-white/85">Intelligence Platform</span>
           </span>
         </Link>
@@ -108,7 +112,7 @@ export function AppLayout() {
         </nav>
 
         <div className="mx-4 mb-5">
-          <WeatherWidget />
+          <WeatherWidget locationName={districtName} unit={settings?.general?.temperatureUnit} />
         </div>
       </aside>
 
@@ -119,7 +123,7 @@ export function AppLayout() {
             <div className="flex h-16 items-center justify-between px-4">
               <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
                 <Droplet className="fill-blue-400 text-blue-400" size={24} />
-                <span className="text-sm font-bold">Smart Water</span>
+                <span className="text-sm font-bold">{organizationName}</span>
               </Link>
               <button className="grid h-10 w-10 place-items-center rounded-md hover:bg-white/10" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
                 <X size={20} />
@@ -157,7 +161,7 @@ export function AppLayout() {
             </button>
             <div className="flex items-baseline gap-3">
               <h1 className="text-lg font-bold">{title}</h1>
-              <p className="hidden text-xs text-black/55 sm:block">{districtName}, Kenya</p>
+              <p className="hidden text-xs text-black/55 sm:block">{districtName}, {country}</p>
             </div>
           </div>
 

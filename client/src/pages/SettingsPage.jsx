@@ -1,44 +1,42 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, Save } from "lucide-react";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
+import { usePlatformSettings } from "../hooks/usePlatformSettings";
 
 export function SettingsPage() {
   const [tab, setTab] = useState("general");
   const [status, setStatus] = useState("");
-  const { data: tenants, refetch: refetchTenants } = useQuery({ queryKey: ["settings-tenants"], queryFn: () => endpoints.tenants().then((res) => res.data) });
+  const queryClient = useQueryClient();
+  const { data: settings } = usePlatformSettings();
   const { data: districts } = useQuery({ queryKey: ["settings-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const { data: summary } = useQuery({ queryKey: ["settings-summary"], queryFn: () => endpoints.dashboardSummary().then((res) => res.data) });
-  const tenant = asArray(tenants)[0];
-  const district = asArray(districts?.features)[0];
-  const [form, setForm] = useState({ organizationName: "", country: "", defaultDistrict: "", defaultZoom: "9", temperatureUnit: "Celsius" });
+  const districtOptions = asArray(districts?.features).map((feature) => feature.properties?.name).filter(Boolean);
+  const [form, setForm] = useState({ organizationName: "", country: "", defaultDistrict: "", defaultZoom: "9", defaultBasemap: "OpenStreetMap", temperatureUnit: "Celsius" });
 
   useEffect(() => {
+    if (!settings) return;
     setForm((current) => ({
       ...current,
-      organizationName: tenant?.name || current.organizationName,
-      country: tenant?.country || current.country,
-      defaultDistrict: district?.properties?.name || current.defaultDistrict,
-      defaultZoom: tenant?.config?.map?.defaultZoom || current.defaultZoom,
-      temperatureUnit: tenant?.config?.general?.temperatureUnit || current.temperatureUnit
+      organizationName: settings.organizationName || current.organizationName,
+      country: settings.country || current.country,
+      defaultDistrict: settings.general.defaultDistrict || current.defaultDistrict,
+      defaultZoom: settings.map.defaultZoom || current.defaultZoom,
+      defaultBasemap: settings.map.defaultBasemap || current.defaultBasemap,
+      temperatureUnit: settings.general.temperatureUnit || current.temperatureUnit
     }));
-  }, [tenant?.id, district?.id]);
+  }, [settings]);
 
   async function saveSettings(event) {
     event.preventDefault();
-    if (tenant?.id) {
-      await endpoints.updateTenant(tenant.id, {
-        name: form.organizationName,
-        country: form.country,
-        config: {
-          ...(tenant.config || {}),
-          general: { ...((tenant.config || {}).general || {}), temperatureUnit: form.temperatureUnit, defaultDistrict: form.defaultDistrict },
-          map: { ...((tenant.config || {}).map || {}), defaultZoom: Number(form.defaultZoom) }
-        }
-      });
-      await refetchTenants();
-    }
+    await endpoints.updateCurrentSettings({
+      organizationName: form.organizationName,
+      country: form.country,
+      general: { temperatureUnit: form.temperatureUnit, defaultDistrict: form.defaultDistrict },
+      map: { defaultZoom: Number(form.defaultZoom), defaultBasemap: form.defaultBasemap }
+    });
+    await queryClient.invalidateQueries({ queryKey: ["platform-settings"] });
     setStatus("Settings saved.");
   }
 
@@ -46,7 +44,7 @@ export function SettingsPage() {
     <section className="space-y-4 p-4 lg:p-5">
       <div>
         <h1 className="text-xl font-bold">Settings</h1>
-        <p className="text-sm text-black/55">{tenant?.name || "Platform"} configuration</p>
+        <p className="text-sm text-black/55">{settings?.organizationName || "Platform"} configuration applied across maps, reports, weather, and navigation.</p>
       </div>
 
       <div className="flex gap-2 rounded-lg border border-black/10 bg-white p-1 shadow-sm">
@@ -61,8 +59,22 @@ export function SettingsPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Input label="Organization Name" value={form.organizationName} onChange={(organizationName) => setForm({ ...form, organizationName })} />
             <Input label="Country" value={form.country} onChange={(country) => setForm({ ...form, country })} />
-            <Input label="Default District" value={form.defaultDistrict} onChange={(defaultDistrict) => setForm({ ...form, defaultDistrict })} />
+            <label className="block text-sm">
+              <span className="mb-1 block text-black/60">Default District</span>
+              <select className="w-full rounded-md border border-black/15 px-3 py-2" value={form.defaultDistrict} onChange={(event) => setForm({ ...form, defaultDistrict: event.target.value })}>
+                {districtOptions.length ? districtOptions.map((name) => <option key={name} value={name}>{name}</option>) : <option value="">No districts available</option>}
+              </select>
+            </label>
             <Input label="Default Map Zoom" value={form.defaultZoom} onChange={(defaultZoom) => setForm({ ...form, defaultZoom })} />
+            <label className="block text-sm">
+              <span className="mb-1 block text-black/60">Default Basemap</span>
+              <select className="w-full rounded-md border border-black/15 px-3 py-2" value={form.defaultBasemap} onChange={(event) => setForm({ ...form, defaultBasemap: event.target.value })}>
+                <option>OpenStreetMap</option>
+                <option>Satellite</option>
+                <option>Terrain</option>
+                <option>Dark Map</option>
+              </select>
+            </label>
             <label className="block text-sm">
               <span className="mb-1 block text-black/60">Temperature Unit</span>
               <select className="w-full rounded-md border border-black/15 px-3 py-2" value={form.temperatureUnit} onChange={(event) => setForm({ ...form, temperatureUnit: event.target.value })}>
@@ -79,11 +91,14 @@ export function SettingsPage() {
           <h2 className="text-sm font-bold">System Information</h2>
           <div className="mt-4 space-y-3 text-sm">
             <Info label="Platform Version" value={import.meta.env.VITE_APP_VERSION || "0.1.0"} ok />
-            <Info label="Default District" value={district?.properties?.name || "-"} />
+            <Info label="Organization" value={settings?.organizationName || "-"} ok />
+            <Info label="Default District" value={settings?.general?.defaultDistrict || "-"} />
+            <Info label="Map Defaults" value={`${settings?.map?.defaultBasemap || "OpenStreetMap"} · Zoom ${settings?.map?.defaultZoom || 9}`} />
+            <Info label="Temperature Unit" value={settings?.general?.temperatureUnit || "Celsius"} />
             <Info label="Water Sources" value={summary?.waterSources?.total ?? 0} ok />
             <Info label="Sensors Online" value={summary?.sensors?.online ?? 0} ok />
             <Info label="Active Alerts" value={summary?.activeAlerts ?? 0} />
-            <Info label="Tenant Slug" value={tenant?.slug || "-"} />
+            <Info label="Tenant Slug" value={settings?.slug || "-"} />
           </div>
         </section>
       </div>

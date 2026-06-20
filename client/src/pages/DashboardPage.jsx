@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip } from "react-leaflet";
 import {
@@ -34,6 +34,7 @@ import {
 import { endpoints } from "../services/api";
 import { geoJsonPointToLatLng } from "../utils/geoHelpers";
 import { asArray } from "../utils/apiData";
+import { usePlatformSettings } from "../hooks/usePlatformSettings";
 
 const mapCenter = [-2.25, 37.85];
 
@@ -60,6 +61,11 @@ export function DashboardPage() {
     soil: false,
     reports: true
   });
+  const { data: settings } = usePlatformSettings();
+
+  useEffect(() => {
+    if (settings?.map?.defaultBasemap) setActiveBasemap(settings.map.defaultBasemap);
+  }, [settings?.map?.defaultBasemap]);
 
   const { data: dashboardData = {} } = useQuery({
     queryKey: ["dashboard-page-data"],
@@ -86,9 +92,11 @@ export function DashboardPage() {
   const summary = dashboardData.summary || {};
   const districts = dashboardData.districts || emptyFeatureCollection;
   const districtFeatures = asArray(districts.features);
-  const selectedDistrict = districtFeatures[0];
+  const selectedDistrict = districtFeatures.find((feature) => feature.properties?.name === settings?.general?.defaultDistrict) || districtFeatures[0];
   const selectedDistrictId = selectedDistrict?.id;
   const selectedDistrictName = selectedDistrict?.properties?.name || "Selected area";
+  const mapZoom = settings?.map?.defaultZoom || 9;
+  const mapCenter = featureCenter(selectedDistrict) || [settings?.map?.centerLat || -2.25, settings?.map?.centerLng || 37.85];
   const sensors = asArray(dashboardData.sensors);
   const alerts = asArray(dashboardData.alerts);
   const reports = asArray(dashboardData.reports);
@@ -148,7 +156,7 @@ export function DashboardPage() {
           <div className="grid min-h-[390px] grid-cols-1 bg-white xl:grid-cols-[17rem_minmax(0,1fr)_16rem]">
             <aside className="z-[500] border-b border-black/10 bg-white/95 p-4 xl:border-b-0 xl:border-r">
               <h1 className="text-xl font-bold leading-tight">{selectedDistrictName}</h1>
-              <p className="mt-1 text-sm text-black/60">County shapefile / selected AOI</p>
+              <p className="mt-1 text-sm text-black/60">{settings?.organizationName || "Smart Water"} · {settings?.country || "Kenya"}</p>
 
               <label className="mt-4 block text-sm font-semibold">
                 County, shapefile or AOI
@@ -177,7 +185,10 @@ export function DashboardPage() {
             </aside>
 
             <div className="relative min-h-[390px]">
-              <DashboardMap districts={districts} points={mapPoints} layers={layers} activeBasemap={activeBasemap} droughtHotspots={droughtHotspots} />
+              <DashboardMap districts={districts} points={mapPoints} layers={layers} activeBasemap={activeBasemap} droughtHotspots={droughtHotspots} center={mapCenter} zoom={mapZoom} />
+              <div className="absolute left-4 top-4 z-[500] rounded-md border border-black/10 bg-white/95 px-3 py-2 text-xs font-semibold text-black/70 shadow-sm">
+                Settings: {activeBasemap} · Zoom {mapZoom} · {selectedDistrictName}
+              </div>
               <div className="absolute bottom-4 left-4 z-[500] rounded-md border border-black/20 bg-white/95 px-3 py-2 shadow-sm">
                 <div className="h-1 w-24 border-x-2 border-b-2 border-black" />
                 <p className="mt-1 text-xs font-semibold text-black/70">0 5 10 km</p>
@@ -279,9 +290,9 @@ export function DashboardPage() {
   );
 }
 
-function DashboardMap({ districts, points, layers, activeBasemap, droughtHotspots }) {
+function DashboardMap({ districts, points, layers, activeBasemap, droughtHotspots, center, zoom }) {
   return (
-    <MapContainer center={mapCenter} zoom={9} minZoom={7} zoomControl className="z-0 h-full min-h-[390px]">
+    <MapContainer key={`${center[0]}-${center[1]}-${zoom}`} center={center} zoom={zoom} minZoom={7} zoomControl className="z-0 h-full min-h-[390px]">
       <TileLayer
         attribution={basemapAttribution(activeBasemap)}
         url={basemapUrl(activeBasemap)}
@@ -486,6 +497,17 @@ function basemapAttribution(item) {
   if (item === "Terrain") return "Map data &copy; OpenTopoMap contributors";
   if (item === "Dark Map") return "&copy; OpenStreetMap contributors &copy; CARTO";
   return "&copy; OpenStreetMap contributors";
+}
+
+function featureCenter(feature) {
+  const coordinates = feature?.geometry?.coordinates?.[0];
+  if (!Array.isArray(coordinates) || !coordinates.length) return null;
+  const totals = coordinates.reduce((acc, coordinate) => {
+    acc.lng += Number(coordinate[0]) || 0;
+    acc.lat += Number(coordinate[1]) || 0;
+    return acc;
+  }, { lat: 0, lng: 0 });
+  return [totals.lat / coordinates.length, totals.lng / coordinates.length];
 }
 
 function formatDate(value) {

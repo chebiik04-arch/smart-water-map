@@ -2,19 +2,23 @@ import { Download } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { endpoints } from "../../services/api";
+import { usePlatformSettings } from "../../hooks/usePlatformSettings";
 
 export function ExportReportButton({ districtId }) {
+  const { data: settings } = usePlatformSettings();
+
   async function exportReport() {
-    const { data } = await endpoints.exportReport({ districtId, format: "pdf" });
+    const { data } = await endpoints.exportReport({ districtId });
     const doc = new jsPDF();
     const date = new Date().toISOString().slice(0, 10);
 
     doc.setFontSize(18);
-    doc.text("Smart Water Intelligence Report", 14, 18);
+    doc.text(`${settings?.organizationName || "Smart Water"} Intelligence Report`, 14, 18);
     doc.setFontSize(11);
-    doc.text(`${data.county || "Selected area"} · ${date}`, 14, 27);
+    doc.text(`${data.county || settings?.general?.defaultDistrict || "Selected area"} · ${settings?.country || "Kenya"} · ${date}`, 14, 27);
+    doc.text(`Settings: ${settings?.map?.defaultBasemap || "OpenStreetMap"} basemap · Zoom ${settings?.map?.defaultZoom || 9} · ${settings?.general?.temperatureUnit || "Celsius"}`, 14, 34);
     autoTable(doc, {
-      startY: 36,
+      startY: 42,
       head: [["Metric", "Value"]],
       body: [
         ["Water sources", `${data.summary.waterSources.total} total / ${data.summary.waterSources.active} active`],

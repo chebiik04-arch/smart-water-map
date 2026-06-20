@@ -8,6 +8,7 @@ import { districtStyle, droughtColor, geoJsonPointToLatLng, scoreColor } from ".
 import { asArray } from "../utils/apiData";
 import { SeverityBadge } from "./SeverityBadge";
 import { WaterTableTerrain } from "./WaterTableTerrain";
+import { usePlatformSettings } from "../hooks/usePlatformSettings";
 
 const { Overlay } = LayersControl;
 
@@ -58,6 +59,7 @@ export function DroughtMap() {
   const [livestockStress, setLivestockStress] = useState({ waterPoints: [], pasture: [] });
   const [liveUpdates, setLiveUpdates] = useState([]);
   const [weekIndex, setWeekIndex] = useState(0);
+  const { data: settings } = usePlatformSettings();
 
   useEffect(() => {
     Promise.all([
@@ -117,7 +119,13 @@ export function DroughtMap() {
 
   return (
     <div className="relative h-full">
-      <MapContainer center={[0.52, 35.27]} zoom={9} minZoom={6} className="z-0">
+      <MapContainer
+        key={`${settings?.map?.centerLat || 0.52}-${settings?.map?.centerLng || 35.27}-${settings?.map?.defaultZoom || 9}`}
+        center={[settings?.map?.centerLat || 0.52, settings?.map?.centerLng || 35.27]}
+        zoom={settings?.map?.defaultZoom || 9}
+        minZoom={6}
+        className="z-0"
+      >
         <LayersControl position="topright">
           <TileLayer
             attribution="&copy; OpenStreetMap contributors"
@@ -266,7 +274,8 @@ export function DroughtMap() {
       </MapContainer>
 
       <div className="absolute left-4 top-4 z-[500] max-w-sm rounded-lg border border-black/10 bg-white/95 p-4 shadow-panel backdrop-blur">
-        <div className="mb-3 flex items-center gap-2 text-primary"><Layers size={18} /><h1 className="font-semibold">Drought GIS</h1></div>
+        <div className="mb-1 flex items-center gap-2 text-primary"><Layers size={18} /><h1 className="font-semibold">{settings?.general?.defaultDistrict || "Drought GIS"}</h1></div>
+        <p className="mb-3 text-xs font-medium text-black/60">{settings?.organizationName || "Smart Water"} · Zoom {settings?.map?.defaultZoom || 9}</p>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <Legend label="Normal" color="#27AE60" />
           <Legend label="Watch" color="#E07B00" />

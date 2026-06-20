@@ -8,6 +8,7 @@ import { CloudRain, Droplet, Layers, RadioTower, Sprout, Waves } from "lucide-re
 import { endpoints } from "../../services/api";
 import { geoJsonPointToLatLng } from "../../utils/geoHelpers";
 import { asArray } from "../../utils/apiData";
+import { usePlatformSettings } from "../../hooks/usePlatformSettings";
 
 const basemaps = {
   OpenStreetMap: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -40,6 +41,11 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
   const { data: sensorData } = useQuery({ queryKey: ["sensors", districtId], queryFn: () => endpoints.sensors({ districtId }).then((res) => res.data) });
   const { data: reportData } = useQuery({ queryKey: ["map-reports", districtId], queryFn: () => endpoints.communityReports({ districtId, limit: 50 }).then((res) => res.data) });
   const { data: heatmapData } = useQuery({ queryKey: ["heatmap", districtId], queryFn: () => endpoints.droughtHeatmap({ districtId }).then((res) => res.data) });
+  const { data: settings } = usePlatformSettings();
+
+  useEffect(() => {
+    if (settings?.map?.defaultBasemap) setBasemap(settings.map.defaultBasemap);
+  }, [settings?.map?.defaultBasemap]);
 
   const waterSources = sources?.features || [];
   const sensors = asArray(sensorData);
@@ -48,7 +54,13 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
 
   return (
     <div className="relative h-full min-h-[430px]">
-      <MapContainer center={defaultCenter} zoom={Number(import.meta.env.VITE_MAP_DEFAULT_ZOOM || 9)} minZoom={7} className="z-0">
+      <MapContainer
+        key={`${settings?.map?.centerLat || defaultCenter[0]}-${settings?.map?.centerLng || defaultCenter[1]}-${settings?.map?.defaultZoom || 9}`}
+        center={[settings?.map?.centerLat || defaultCenter[0], settings?.map?.centerLng || defaultCenter[1]]}
+        zoom={settings?.map?.defaultZoom || Number(import.meta.env.VITE_MAP_DEFAULT_ZOOM || 9)}
+        minZoom={7}
+        className="z-0"
+      >
         <TileLayer attribution="&copy; OpenStreetMap contributors" url={basemaps[basemap]} />
         <ScaleControl position="bottomleft" metric imperial={false} />
         {districts && <GeoJSON data={districts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
@@ -79,6 +91,9 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
           return <CircleMarker key={report.id} center={position} radius={6} pathOptions={{ color: "#fff", weight: 2, fillColor: "#FACC15", fillOpacity: 0.95 }}><Popup><strong>{report.description}</strong><p>{report.timeAgo}</p></Popup></CircleMarker>;
         })}
       </MapContainer>
+      <div className="absolute left-4 top-4 z-[500] rounded-md border border-black/10 bg-white/95 px-3 py-2 text-xs font-semibold text-black/70 shadow-sm">
+        {settings?.general?.defaultDistrict || "Selected area"} · {basemap} · Zoom {settings?.map?.defaultZoom || 9}
+      </div>
       <MapPanels basemap={basemap} setBasemap={setBasemap} layers={layers} setLayers={setLayers} expanded={expanded} heatOpacity={heatOpacity} setHeatOpacity={setHeatOpacity} showLayerPanel={showLayerPanel} />
       {showLegend && <MapLegend />}
     </div>

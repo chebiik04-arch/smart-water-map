@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { CloudRain } from "lucide-react";
 import { endpoints } from "../../services/api";
+import { formatTemperature } from "../../hooks/usePlatformSettings";
 
-export function WeatherWidget({ districtId, locationName = "Weather" }) {
+export function WeatherWidget({ districtId, locationName = "Weather", unit = "Celsius" }) {
   const { data } = useQuery({
     queryKey: ["weather", districtId],
     queryFn: () => endpoints.weatherCurrent({ districtId }).then((res) => res.data),
@@ -16,8 +17,9 @@ export function WeatherWidget({ districtId, locationName = "Weather" }) {
         {locationName}
       </div>
       {data ? <>
-        <p className="mt-4 text-3xl font-bold">{data.tempC}°C</p>
+        <p className="mt-4 text-3xl font-bold">{formatTemperature(data.tempC, unit)}</p>
         <p className="text-sm text-white/85">{data.condition}</p>
+        <p className="text-xs text-white/65">Configured in {unit}</p>
         <p className="mt-3 text-sm text-white/85">Humidity: {data.humidity}%</p>
         <p className="text-sm text-white/85">Wind: {data.windKmh} km/h</p>
       </> : <p className="mt-4 text-sm text-white/75">Weather data unavailable.</p>}
