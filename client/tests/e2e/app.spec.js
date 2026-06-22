@@ -42,6 +42,21 @@ test("renders map layers with mocked GIS APIs", async ({ page }) => {
   await expect(page.getByText("Conflict zones")).toBeVisible();
 });
 
+test("collapses and expands the dashboard navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await loginByStorage(page, "/dashboard");
+  const sidebar = page.getByTestId("desktop-sidebar");
+  await expect(sidebar).toHaveCSS("width", "220px");
+
+  await page.getByRole("button", { name: "Collapse navigation" }).first().click();
+  await expect(sidebar).toHaveCSS("width", "76px");
+  await expect(sidebar.getByText("Water Sources")).toBeHidden();
+
+  await page.getByRole("button", { name: "Expand navigation" }).first().click();
+  await expect(sidebar).toHaveCSS("width", "220px");
+  await expect(sidebar.getByText("Water Sources")).toBeVisible();
+});
+
 test("queues a report when offline", async ({ page, context }) => {
   await loginByStorage(page, "/reports");
   await context.setOffline(true);

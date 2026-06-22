@@ -13,6 +13,8 @@ import {
   Mail,
   Map,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   X,
   RadioTower,
   Settings,
@@ -64,6 +66,7 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("smart-water-map-sidebar") === "collapsed");
   const { data: districts } = useQuery({ queryKey: ["layout-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const { data: settings } = usePlatformSettings();
   const visibleLinks = links.filter((link) => !link.admin || user?.role === "admin");
@@ -74,46 +77,70 @@ export function AppLayout() {
   const displayName = user?.name || user?.email || "User";
   const role = user?.role ? user.role.replace("_", " ") : "County Officer";
 
+  function toggleSidebar() {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      localStorage.setItem("smart-water-map-sidebar", next ? "collapsed" : "expanded");
+      return next;
+    });
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F6F4] text-[#17201d]">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[220px] bg-gradient-to-b from-[#006B58] to-[#003A32] text-white lg:flex lg:flex-col">
-        <Link to="/dashboard" className="flex h-[72px] items-center gap-2 px-4 py-4">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10">
-            <Droplet className="fill-blue-400 text-blue-400" size={23} />
-          </span>
-          <span>
-            <span className="block text-sm font-bold leading-tight">{organizationName}</span>
-            <span className="block text-[10px] text-white/85">Intelligence Platform</span>
-          </span>
-        </Link>
+      <aside data-testid="desktop-sidebar" className={`fixed inset-y-0 left-0 z-20 hidden bg-gradient-to-b from-[#006B58] to-[#003A32] text-white transition-[width] duration-200 lg:flex lg:flex-col ${sidebarCollapsed ? "w-[76px]" : "w-[220px]"}`}>
+        <div className={`flex h-[72px] items-center ${sidebarCollapsed ? "justify-center px-3" : "gap-2 px-4"} py-4`}>
+          <Link to="/dashboard" className={`flex min-w-0 items-center ${sidebarCollapsed ? "justify-center" : "gap-2"}`} title={organizationName}>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10">
+              <Droplet className="fill-blue-400 text-blue-400" size={23} />
+            </span>
+            {!sidebarCollapsed && (
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-bold leading-tight">{organizationName}</span>
+                <span className="block text-[10px] text-white/85">Intelligence Platform</span>
+              </span>
+            )}
+          </Link>
+        </div>
 
-        <nav className="flex-1 space-y-1.5 px-3">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className={`mx-3 mb-3 hidden h-9 items-center rounded-md border border-white/15 bg-white/5 text-sm font-medium text-white/90 hover:bg-white/10 lg:flex ${sidebarCollapsed ? "justify-center px-0" : "justify-between px-3"}`}
+          aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+          title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+        >
+          {!sidebarCollapsed && <span>Collapse</span>}
+          {sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+        </button>
+
+        <nav className={`flex-1 space-y-1.5 ${sidebarCollapsed ? "px-2" : "px-3"}`}>
           {visibleLinks.map(({ to, label, icon: Icon, badge, disabled }) => (
             disabled ? (
-              <div key={to} className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium text-white/80">
-                <Icon size={17} /> <span className="flex-1 leading-snug">{label}</span>
+              <div key={to} className={`flex items-center rounded-md py-2.5 text-sm font-medium text-white/80 ${sidebarCollapsed ? "justify-center px-0" : "gap-2.5 px-3"}`} title={label}>
+                <Icon size={17} /> {!sidebarCollapsed && <span className="flex-1 leading-snug">{label}</span>}
               </div>
             ) : (
               <NavLink
                 key={to}
                 to={to}
+                title={label}
                 className={({ isActive }) =>
-                  `flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition ${
+                  `relative flex items-center rounded-md py-2.5 text-sm font-medium transition ${sidebarCollapsed ? "justify-center px-0" : "gap-2.5 px-3"} ${
                     isActive ? "bg-emerald-500/80 text-white shadow-sm" : "text-white/90 hover:bg-white/10"
                   }`
                 }
               >
                 <Icon size={17} />
-                <span className="flex-1 leading-snug">{label}</span>
-                {badge && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{badge}</span>}
+                {!sidebarCollapsed && <span className="flex-1 leading-snug">{label}</span>}
+                {badge && <span className={`${sidebarCollapsed ? "absolute right-1 top-1" : ""} rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white`}>{badge}</span>}
               </NavLink>
             )
           ))}
         </nav>
 
-        <div className="mx-4 mb-5">
+        {!sidebarCollapsed && <div className="mx-4 mb-5">
           <WeatherWidget locationName={districtName} unit={settings?.general?.temperatureUnit} />
-        </div>
+        </div>}
       </aside>
 
       {mobileMenuOpen && (
@@ -153,10 +180,18 @@ export function AppLayout() {
         </div>
       )}
 
-      <main className="lg:pl-[220px]">
+      <main className={`transition-[padding] duration-200 ${sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-[220px]"}`}>
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-black/10 bg-white px-4 shadow-sm">
           <div className="flex items-center gap-4">
-            <button className="grid h-10 w-10 place-items-center rounded-md text-black/65 hover:bg-black/5" aria-label="Open menu" onClick={() => setMobileMenuOpen(true)}>
+            <button
+              className="grid h-10 w-10 place-items-center rounded-md text-black/65 hover:bg-black/5"
+              aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+              title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+              onClick={() => {
+                if (window.matchMedia("(min-width: 1024px)").matches) toggleSidebar();
+                else setMobileMenuOpen(true);
+              }}
+            >
               <Menu size={21} />
             </button>
             <div className="flex items-baseline gap-3">
