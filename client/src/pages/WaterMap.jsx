@@ -1,22 +1,66 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DroughtMap } from "../components/map/DroughtMap";
 import { TimeSeriesChart } from "../components/TimeSeriesChart";
 import { endpoints } from "../services/api";
-import { featuresToProperties } from "../utils/apiData";
+import { asArray, featuresToProperties } from "../utils/apiData";
+
+const selectedDistrictStorageKey = "smart-water-map-selected-district";
+const selectedDistrictEventName = "smart-water-map:district-change";
+const emptyFeatureCollection = { type: "FeatureCollection", features: [] };
 
 export function WaterMap() {
+  const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
   const [selectedSource, setSelectedSource] = useState(null);
+  const { data: districts = emptyFeatureCollection } = useQuery({
+    queryKey: ["water-map-districts"],
+    queryFn: () => endpoints.districts().then((res) => res.data)
+  });
+  const districtFeatures = asArray(districts.features);
+
+  useEffect(() => {
+    if (selectedDistrictId || !districtFeatures.length) return;
+    updateSelectedDistrict(districtFeatures[0].id);
+  }, [districtFeatures, selectedDistrictId]);
+
+  function updateSelectedDistrict(districtId) {
+    setSelectedDistrictId(districtId);
+    localStorage.setItem(selectedDistrictStorageKey, districtId);
+    window.dispatchEvent(new CustomEvent(selectedDistrictEventName, { detail: { districtId } }));
+    setSelectedSource(null);
+  }
+
   const { data: sources } = useQuery({
-    queryKey: ["water-map-sources"],
-    queryFn: () => endpoints.waterSources().then((res) => res.data)
+    queryKey: ["water-map-sources", selectedDistrictId],
+    queryFn: () => endpoints.waterSources({ districtId: selectedDistrictId }).then((res) => res.data),
+    enabled: Boolean(selectedDistrictId)
   });
   const rows = useMemo(() => featuresToProperties(sources), [sources]);
+  const selectedDistrict = districtFeatures.find((feature) => feature.id === selectedDistrictId);
+  const selectedDistrictName = selectedDistrict?.properties?.name || "Selected region";
 
   return (
     <section className="space-y-4 p-4 lg:p-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-black/10 bg-white p-4 shadow-sm">
+        <div>
+          <h1 className="text-xl font-bold leading-tight">{selectedDistrictName}</h1>
+          <p className="mt-1 text-sm text-black/60">Water point map and source inventory</p>
+        </div>
+        <label className="block w-full text-sm font-semibold sm:w-80">
+          Region or county
+          <select
+            className="mt-2 w-full rounded-md border border-black/15 bg-white px-3 py-2 text-sm"
+            value={selectedDistrictId}
+            onChange={(event) => updateSelectedDistrict(event.target.value)}
+          >
+            {districtFeatures.map((feature) => (
+              <option key={feature.id} value={feature.id}>{feature.properties?.name || feature.id}</option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div className="h-[470px] overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
-        <DroughtMap allLayers showLayerPanel={false} showLegend onWaterSourceClick={setSelectedSource} />
+        <DroughtMap districtId={selectedDistrictId} allLayers showLayerPanel={false} showLegend onWaterSourceClick={setSelectedSource} />
       </div>
       <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-black/10 p-4">

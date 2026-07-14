@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../config/prisma.js";
-import { monthLabel, monthsBack } from "../utils/time.js";
+import { monthLabel, monthsBack, yearToDateMonths } from "../utils/time.js";
 
 export const ndviRouter = Router();
 export const rainfallRouter = Router();
@@ -8,8 +8,8 @@ export const groundwaterRouter = Router();
 
 ndviRouter.get("/:districtId", async (req, res, next) => {
   try {
-    const months = requestedMonths(req.query.months);
-    const start = new Date(`${monthsBack(months)[0]}-01T00:00:00.000Z`);
+    const months = requestedMonths(req.query);
+    const start = new Date(`${months[0]}-01T00:00:00.000Z`);
     const rows = await prisma.$queryRaw`
       SELECT to_char(date_trunc('month', "capturedAt"), 'YYYY-MM') AS month, AVG(value)::float AS value
       FROM "NDVIReading"
@@ -29,11 +29,11 @@ ndviRouter.get("/:districtId", async (req, res, next) => {
 
 rainfallRouter.get("/:districtId", async (req, res, next) => {
   try {
-    const months = requestedMonths(req.query.months);
+    const months = requestedMonths(req.query);
     const rows = await prisma.rainfallRecord.findMany({
       where: {
         districtId: req.params.districtId,
-        month: { in: monthsBack(months) },
+        month: { in: months },
         district: req.tenantId ? { tenantId: req.tenantId } : {}
       },
       orderBy: { month: "asc" }
@@ -46,8 +46,8 @@ rainfallRouter.get("/:districtId", async (req, res, next) => {
 
 groundwaterRouter.get("/:districtId", async (req, res, next) => {
   try {
-    const months = requestedMonths(req.query.months);
-    const start = `${monthsBack(months)[0]}-01`;
+    const months = requestedMonths(req.query);
+    const start = `${months[0]}-01`;
     const rows = await prisma.$queryRaw`
       SELECT to_char(date_trunc('month', wsr.timestamp), 'YYYY-MM') AS month,
         AVG(wsr."waterLevel")::float AS "avgDepth"
@@ -67,13 +67,14 @@ groundwaterRouter.get("/:districtId", async (req, res, next) => {
   }
 });
 
-function requestedMonths(value) {
-  return Math.max(1, Math.min(24, Number(value || 6)));
+function requestedMonths(query) {
+  if (query.calendarYear === "true") return yearToDateMonths();
+  return monthsBack(Math.max(1, Math.min(24, Number(query.months || 6))));
 }
 
-function fillSeries(rows, count, key, fallback) {
+function fillSeries(rows, months, key, fallback) {
   const byMonth = Object.fromEntries(rows.map((row) => [row.month, row]));
-  return monthsBack(count).map((month) => ({
+  return months.map((month) => ({
     month: monthLabel(month),
     [key]: Number((byMonth[month]?.[key] ?? fallback).toFixed(2))
   }));

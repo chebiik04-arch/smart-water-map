@@ -514,6 +514,7 @@ model WaterSource {
   depth         Float?
   yield         Float?
   lastInspected DateTime?
+  inspectionNotes String?
   createdAt     DateTime                             @default(now())
   readings      WaterSourceReading[]
 

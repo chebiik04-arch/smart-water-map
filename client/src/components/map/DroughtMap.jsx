@@ -38,7 +38,7 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
 
   const { data: districts } = useQuery({ queryKey: ["districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const { data: sources } = useQuery({ queryKey: ["water-sources", districtId], queryFn: () => endpoints.waterSources({ districtId }).then((res) => res.data) });
-  const { data: sensorData } = useQuery({ queryKey: ["sensors", districtId], queryFn: () => endpoints.sensors({ districtId }).then((res) => res.data) });
+  const { data: sensorData } = useQuery({ queryKey: ["sensors", districtId], queryFn: () => endpoints.sensors({ district: districtId }).then((res) => res.data) });
   const { data: reportData } = useQuery({ queryKey: ["map-reports", districtId], queryFn: () => endpoints.communityReports({ districtId, limit: 50 }).then((res) => res.data) });
   const { data: heatmapData } = useQuery({ queryKey: ["heatmap", districtId], queryFn: () => endpoints.droughtHeatmap({ districtId }).then((res) => res.data) });
   const { data: settings } = usePlatformSettings();
@@ -51,12 +51,16 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
   const sensors = asArray(sensorData);
   const reports = asArray(reportData);
   const heatPoints = asArray(heatmapData);
+  const selectedDistrict = asArray(districts?.features).find((feature) => feature.id === districtId);
+  const visibleDistricts = selectedDistrict ? { type: "FeatureCollection", features: [selectedDistrict] } : districts;
+  const selectedCenter = featureCenter(selectedDistrict) || [settings?.map?.centerLat || defaultCenter[0], settings?.map?.centerLng || defaultCenter[1]];
+  const selectedDistrictName = selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || "Selected area";
 
   return (
     <div className="relative h-full min-h-[430px]">
       <MapContainer
-        key={`${settings?.map?.centerLat || defaultCenter[0]}-${settings?.map?.centerLng || defaultCenter[1]}-${settings?.map?.defaultZoom || 9}`}
-        center={[settings?.map?.centerLat || defaultCenter[0], settings?.map?.centerLng || defaultCenter[1]]}
+        key={`${selectedCenter[0]}-${selectedCenter[1]}-${settings?.map?.defaultZoom || 9}-${districtId || "all"}`}
+        center={selectedCenter}
         zoom={settings?.map?.defaultZoom || Number(import.meta.env.VITE_MAP_DEFAULT_ZOOM || 9)}
         minZoom={7}
         zoomControl={false}
@@ -65,8 +69,8 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
         <ZoomControl position="topleft" />
         <TileLayer attribution="&copy; OpenStreetMap contributors" url={basemaps[basemap]} />
         <ScaleControl position="bottomleft" metric imperial={false} />
-        {districts && <GeoJSON data={districts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
-        {layers.ndvi && districts && <GeoJSON data={districts} style={() => ({ color: "#22C55E", fillColor: "#BBF7D0", fillOpacity: 0.2, weight: 1 })} />}
+        {visibleDistricts && <GeoJSON data={visibleDistricts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
+        {layers.ndvi && visibleDistricts && <GeoJSON data={visibleDistricts} style={() => ({ color: "#22C55E", fillColor: "#BBF7D0", fillOpacity: 0.2, weight: 1 })} />}
         {layers.hotspots && <HeatLayer points={heatPoints} opacity={heatOpacity} />}
         <LayerGroup>
           {waterSources.map((feature) => {
@@ -94,7 +98,7 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
         })}
       </MapContainer>
       <div className="absolute left-4 top-20 z-[500] max-w-[calc(100%-2rem)] rounded-md border border-black/10 bg-white/95 px-3 py-2 text-xs font-semibold text-black/70 shadow-sm">
-        {settings?.general?.defaultDistrict || "Selected area"} · {basemap} · Zoom {settings?.map?.defaultZoom || 9}
+        {selectedDistrictName} · {basemap} · Zoom {settings?.map?.defaultZoom || 9}
       </div>
       <MapPanels basemap={basemap} setBasemap={setBasemap} layers={layers} setLayers={setLayers} expanded={expanded} heatOpacity={heatOpacity} setHeatOpacity={setHeatOpacity} showLayerPanel={showLayerPanel} />
       {showLegend && <MapLegend />}
@@ -167,4 +171,15 @@ function LayerToggle({ label, color, icon: Icon = RadioTower, checked, onChange 
 
 function toggle(setLayers, key) {
   setLayers((current) => ({ ...current, [key]: !current[key] }));
+}
+
+function featureCenter(feature) {
+  const coordinates = feature?.geometry?.coordinates?.[0];
+  if (!Array.isArray(coordinates) || !coordinates.length) return null;
+  const totals = coordinates.reduce((acc, coordinate) => {
+    acc.lng += Number(coordinate[0]) || 0;
+    acc.lat += Number(coordinate[1]) || 0;
+    return acc;
+  }, { lat: 0, lng: 0 });
+  return [totals.lat / coordinates.length, totals.lng / coordinates.length];
 }

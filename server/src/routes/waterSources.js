@@ -15,7 +15,7 @@ router.get("/", async (req, res, next) => {
     };
 
     const rows = await prisma.$queryRaw`
-      SELECT ws.id, ws.name, ws.type, ws.status, ws.depth, ws.yield, ws."lastInspected",
+      SELECT ws.id, ws.name, ws.type, ws.status, ws.depth, ws.yield, ws."lastInspected", ws."inspectionNotes",
         d.name AS "districtName",
         ST_AsGeoJSON(ws.location)::json AS geometry,
         latest."waterLevel" AS "latestLevel"
@@ -49,7 +49,8 @@ router.get("/", async (req, res, next) => {
           yield: row.yield,
           districtName: row.districtName,
           latestLevel: row.latestLevel,
-          lastInspected: row.lastInspected
+          lastInspected: row.lastInspected,
+          inspectionNotes: row.inspectionNotes
         }
       }))
     });
@@ -61,7 +62,7 @@ router.get("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     const [source] = await prisma.$queryRaw`
-      SELECT ws.id, ws.name, ws.type, ws.status, ws.depth, ws.yield, ws."lastInspected", ws."createdAt",
+      SELECT ws.id, ws.name, ws.type, ws.status, ws.depth, ws.yield, ws."lastInspected", ws."inspectionNotes", ws."createdAt",
         ws."districtId", d.name AS "districtName", ST_AsGeoJSON(ws.location)::json AS location
       FROM "WaterSource" ws
       JOIN "District" d ON d.id = ws."districtId"
@@ -101,12 +102,12 @@ router.post("/", authenticate, requireRole("admin", "field_agent"), async (req, 
     });
     if (!district) return res.status(404).json({ error: "District not found" });
     const [source] = await prisma.$queryRaw`
-      INSERT INTO "WaterSource" (id, name, type, location, "districtId", status, depth, yield, "lastInspected", "createdAt")
+      INSERT INTO "WaterSource" (id, name, type, location, "districtId", status, depth, yield, "lastInspected", "inspectionNotes", "createdAt")
       VALUES (gen_random_uuid(), ${input.name}, ${input.type}::"WaterSourceType",
         ST_SetSRID(ST_MakePoint(${input.longitude}, ${input.latitude}), 4326),
         ${input.districtId}::uuid, ${input.status}::"SourceStatus", ${input.depth || null}, ${input.yield || null},
-        ${input.lastInspected ? new Date(input.lastInspected) : null}, NOW())
-      RETURNING id, name, type, status, depth, yield, "lastInspected", "districtId", ST_AsGeoJSON(location)::json AS location
+        ${input.lastInspected ? new Date(input.lastInspected) : null}, ${input.inspectionNotes || null}, NOW())
+      RETURNING id, name, type, status, depth, yield, "lastInspected", "inspectionNotes", "districtId", ST_AsGeoJSON(location)::json AS location
     `;
     res.status(201).json(source);
   } catch (err) {
@@ -123,7 +124,7 @@ router.patch("/:id", authenticate, requireRole("admin", "field_agent"), async (r
     });
     if (!existing) return res.status(404).json({ error: "Water source not found" });
     const data = {};
-    for (const key of ["name", "type", "status", "depth", "yield", "lastInspected"]) {
+    for (const key of ["name", "type", "status", "depth", "yield", "lastInspected", "inspectionNotes"]) {
       if (input[key] !== undefined) data[key] = key === "lastInspected" && input[key] ? new Date(input[key]) : input[key];
     }
     if (input.latitude !== undefined && input.longitude !== undefined) {
@@ -135,9 +136,10 @@ router.patch("/:id", authenticate, requireRole("admin", "field_agent"), async (r
           depth = COALESCE(${input.depth ?? null}, depth),
           yield = COALESCE(${input.yield ?? null}, yield),
           "lastInspected" = COALESCE(${input.lastInspected ? new Date(input.lastInspected) : null}, "lastInspected"),
+          "inspectionNotes" = COALESCE(${input.inspectionNotes ?? null}, "inspectionNotes"),
           location = ST_SetSRID(ST_MakePoint(${input.longitude}, ${input.latitude}), 4326)
         WHERE id = ${req.params.id}::uuid
-        RETURNING id, name, type, status, depth, yield, "lastInspected", "districtId", ST_AsGeoJSON(location)::json AS location
+        RETURNING id, name, type, status, depth, yield, "lastInspected", "inspectionNotes", "districtId", ST_AsGeoJSON(location)::json AS location
       `;
       emitWaterSourceUpdate(updated);
       return res.json(updated);
@@ -197,7 +199,8 @@ const sourceSchema = z.object({
   status: z.enum(["ACTIVE", "DRY", "UNDER_REPAIR", "ABANDONED"]).default("ACTIVE"),
   depth: z.number().optional(),
   yield: z.number().optional(),
-  lastInspected: z.string().datetime().optional()
+  lastInspected: z.string().datetime().optional(),
+  inspectionNotes: z.string().max(2000).optional()
 });
 
 const sourceUpdateSchema = sourceSchema.partial().omit({ districtId: true });

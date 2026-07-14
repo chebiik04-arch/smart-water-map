@@ -131,17 +131,17 @@ export function DashboardPage() {
 
   const { data: rainfallData } = useQuery({
     queryKey: ["dashboard-rainfall", selectedDistrictId],
-    queryFn: () => endpoints.rainfallSeries(selectedDistrictId, { months: 6 }).then((res) => res.data),
+    queryFn: () => endpoints.rainfallSeries(selectedDistrictId, { calendarYear: true }).then((res) => res.data),
     enabled: Boolean(selectedDistrictId)
   });
   const { data: ndviData } = useQuery({
     queryKey: ["dashboard-ndvi", selectedDistrictId],
-    queryFn: () => endpoints.ndviSeries(selectedDistrictId, { months: 6 }).then((res) => res.data),
+    queryFn: () => endpoints.ndviSeries(selectedDistrictId, { calendarYear: true }).then((res) => res.data),
     enabled: Boolean(selectedDistrictId)
   });
   const { data: groundwaterData } = useQuery({
     queryKey: ["dashboard-groundwater", selectedDistrictId],
-    queryFn: () => endpoints.groundwaterSeries(selectedDistrictId, { months: 6 }).then((res) => res.data),
+    queryFn: () => endpoints.groundwaterSeries(selectedDistrictId, { calendarYear: true }).then((res) => res.data),
     enabled: Boolean(selectedDistrictId)
   });
   const { data: forecast } = useQuery({
@@ -258,20 +258,20 @@ export function DashboardPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1.25fr]">
-        <ChartCard title="Rainfall Trend (Last 6 Months)">
+        <ChartCard title="Rainfall Trend (Year to Date)">
           {rainfallTrend.length ? <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={rainfallTrend}>
+            <BarChart data={rainfallTrend} barCategoryGap="32%" barGap={8}>
               <CartesianGrid stroke="#E7EAE5" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <ChartTooltip />
-              <Bar dataKey="value" name="Rainfall (mm)" radius={[3, 3, 0, 0]}>
+              <Bar dataKey="value" name="Rainfall (mm)" barSize={18} radius={[3, 3, 0, 0]}>
                 {rainfallTrend.map((entry) => <Cell key={entry.label} fill={entry.label === "May" ? "#DDE5F6" : "#2D8CFF"} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer> : <EmptyChart message="No rainfall series returned by the backend." />}
         </ChartCard>
-        <ChartCard title="Vegetation Health (NDVI)">
+        <ChartCard title="Vegetation Health (Year to Date)">
           {ndviTrend.length ? <ResponsiveContainer width="100%" height={150}>
             <LineChart data={ndviTrend}>
               <CartesianGrid stroke="#E7EAE5" vertical={false} />
@@ -282,7 +282,7 @@ export function DashboardPage() {
             </LineChart>
           </ResponsiveContainer> : <EmptyChart message="No NDVI series returned by the backend." />}
         </ChartCard>
-        <ChartCard title="Groundwater Levels">
+        <ChartCard title="Groundwater Levels (Year to Date)">
           {groundwaterTrend.length ? <ResponsiveContainer width="100%" height={150}>
             <LineChart data={groundwaterTrend}>
               <CartesianGrid stroke="#E7EAE5" vertical={false} />
@@ -307,10 +307,25 @@ function DashboardMap({ districts, points, layers, activeBasemap, droughtHotspot
         attribution={basemapAttribution(activeBasemap)}
         url={basemapUrl(activeBasemap)}
       />
+      {layers.rainfall && (
+        <GeoJSON
+          key="rainfall-layer"
+          data={districts}
+          style={() => ({ color: "#2563EB", dashArray: "6 5", fillColor: "#60A5FA", fillOpacity: 0.2, opacity: 0.9, weight: 2 })}
+        />
+      )}
       {layers.ndvi && (
         <GeoJSON
+          key="ndvi-layer"
           data={districts}
-          style={() => ({ color: "#159957", fillColor: "#A7F3D0", fillOpacity: 0.24, weight: 1 })}
+          style={() => ({ color: "#159957", fillColor: "#A7F3D0", fillOpacity: 0.24, opacity: 0.9, weight: 2 })}
+        />
+      )}
+      {layers.soil && (
+        <GeoJSON
+          key="soil-layer"
+          data={districts}
+          style={() => ({ color: "#A16207", dashArray: "2 6", fillColor: "#D97706", fillOpacity: 0.16, opacity: 0.9, weight: 2 })}
         />
       )}
       {districts && (
@@ -333,7 +348,7 @@ function DashboardMap({ districts, points, layers, activeBasemap, droughtHotspot
         />
       ))}
       {points.map((point) => shouldShowPoint(point.type, layers) && (
-        <CircleMarker key={point.id} center={point.position} radius={point.type === "REPORT" ? 7 : 5} pathOptions={pointStyle(point.type)}>
+        <CircleMarker key={point.id} center={point.position} radius={pointRadius(point.type)} pathOptions={pointStyle(point.type)}>
           <Tooltip>{point.label}</Tooltip>
         </CircleMarker>
       ))}
@@ -480,6 +495,15 @@ function pointStyle(type) {
     REPORT: "#F59E0B"
   }[type] || "#2D8CFF";
   return { color: "#FFFFFF", weight: 2, fillColor: color, fillOpacity: 0.95 };
+}
+
+function pointRadius(type) {
+  return {
+    BOREHOLE: 7,
+    WATER_POINT: 6,
+    SENSOR: 6,
+    REPORT: 8
+  }[type] || 6;
 }
 
 function toggleLayer(setLayers, key) {

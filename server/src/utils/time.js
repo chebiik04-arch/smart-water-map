@@ -29,6 +29,11 @@ export function monthsBack(count) {
   });
 }
 
+export function yearToDateMonths() {
+  const now = new Date();
+  return Array.from({ length: now.getUTCMonth() + 1 }, (_, index) => monthKey(new Date(Date.UTC(now.getUTCFullYear(), index, 1))));
+}
+
 export function clamp(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, Number(value) || 0));
 }
