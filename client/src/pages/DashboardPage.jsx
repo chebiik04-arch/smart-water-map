@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, ZoomControl } from "react-leaflet";
 import {
   AlertTriangle,
   ArrowDown,
@@ -153,8 +153,8 @@ export function DashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
-          <div className="grid min-h-[390px] grid-cols-1 bg-white xl:grid-cols-[17rem_minmax(0,1fr)_16rem]">
-            <aside className="z-[500] border-b border-black/10 bg-white/95 p-4 xl:border-b-0 xl:border-r">
+          <div className="grid min-h-[390px] grid-cols-1 bg-white xl:h-[clamp(430px,58vh,620px)] xl:grid-cols-[17rem_minmax(0,1fr)_16rem]">
+            <aside className="z-[500] border-b border-black/10 bg-white/95 p-4 xl:h-full xl:overflow-y-auto xl:border-b-0 xl:border-r">
               <h1 className="text-xl font-bold leading-tight">{selectedDistrictName}</h1>
               <p className="mt-1 text-sm text-black/60">{settings?.organizationName || "Smart Water"} · {settings?.country || "Kenya"}</p>
 
@@ -184,7 +184,7 @@ export function DashboardPage() {
               </div>
             </aside>
 
-            <div className="relative min-h-[390px]">
+            <div className="relative h-[430px] min-h-[390px] xl:h-full">
               <DashboardMap districts={districts} points={mapPoints} layers={layers} activeBasemap={activeBasemap} droughtHotspots={droughtHotspots} center={mapCenter} zoom={mapZoom} />
               <div className="absolute left-4 top-4 z-[500] rounded-md border border-black/10 bg-white/95 px-3 py-2 text-xs font-semibold text-black/70 shadow-sm">
                 Settings: {activeBasemap} · Zoom {mapZoom} · {selectedDistrictName}
@@ -195,7 +195,7 @@ export function DashboardPage() {
               </div>
             </div>
 
-            <aside className="z-[500] space-y-3 border-t border-black/10 bg-white/95 p-4 xl:border-l xl:border-t-0">
+            <aside className="z-[500] space-y-3 border-t border-black/10 bg-white/95 p-4 xl:h-full xl:overflow-y-auto xl:border-l xl:border-t-0">
               <CollapsiblePanel title="Basemaps" collapsed={basemapsCollapsed} onToggle={() => setBasemapsCollapsed((value) => !value)}>
                 {["OpenStreetMap", "Satellite", "Terrain", "Dark Map"].map((item) => (
                   <button key={item} onClick={() => setActiveBasemap(item)} className="mt-2 flex w-full items-center gap-3 rounded-md border border-black/10 p-2 text-left text-sm hover:bg-black/[0.03]">
@@ -292,7 +292,8 @@ export function DashboardPage() {
 
 function DashboardMap({ districts, points, layers, activeBasemap, droughtHotspots, center, zoom }) {
   return (
-    <MapContainer key={`${center[0]}-${center[1]}-${zoom}`} center={center} zoom={zoom} minZoom={7} zoomControl className="z-0 h-full min-h-[390px]">
+    <MapContainer key={`${center[0]}-${center[1]}-${zoom}`} center={center} zoom={zoom} minZoom={7} zoomControl={false} className="z-0 h-full min-h-[390px]">
+      <ZoomControl position="bottomright" />
       <TileLayer
         attribution={basemapAttribution(activeBasemap)}
         url={basemapUrl(activeBasemap)}

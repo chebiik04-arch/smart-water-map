@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Popup, ScaleControl, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Popup, ScaleControl, TileLayer, Tooltip, ZoomControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.heat";
 import "leaflet.markercluster";
@@ -59,8 +59,10 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
         center={[settings?.map?.centerLat || defaultCenter[0], settings?.map?.centerLng || defaultCenter[1]]}
         zoom={settings?.map?.defaultZoom || Number(import.meta.env.VITE_MAP_DEFAULT_ZOOM || 9)}
         minZoom={7}
+        zoomControl={false}
         className="z-0"
       >
+        <ZoomControl position="bottomright" />
         <TileLayer attribution="&copy; OpenStreetMap contributors" url={basemaps[basemap]} />
         <ScaleControl position="bottomleft" metric imperial={false} />
         {districts && <GeoJSON data={districts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
