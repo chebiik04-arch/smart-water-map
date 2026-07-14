@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, ZoomControl } from "react-leaflet";
 import {
   AlertTriangle,
@@ -10,12 +11,8 @@ import {
   CloudRain,
   Droplet,
   FileDown,
-  MapPin,
-  MousePointer2,
-  Ruler,
   Sprout,
   TrendingUp,
-  Upload,
   Waves,
   Wifi
 } from "lucide-react";
@@ -37,6 +34,8 @@ import { asArray } from "../utils/apiData";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 
 const mapCenter = [-2.25, 37.85];
+const selectedDistrictStorageKey = "smart-water-map-selected-district";
+const selectedDistrictEventName = "smart-water-map:district-change";
 
 const emptyFeatureCollection = { type: "FeatureCollection", features: [] };
 
@@ -48,6 +47,7 @@ const riskColors = {
 };
 
 export function DashboardPage() {
+  const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
   const [activeBasemap, setActiveBasemap] = useState("OpenStreetMap");
   const [basemapsCollapsed, setBasemapsCollapsed] = useState(false);
   const [layersCollapsed, setLayersCollapsed] = useState(false);
@@ -67,49 +67,67 @@ export function DashboardPage() {
     if (settings?.map?.defaultBasemap) setActiveBasemap(settings.map.defaultBasemap);
   }, [settings?.map?.defaultBasemap]);
 
+  const { data: districts = emptyFeatureCollection } = useQuery({
+    queryKey: ["dashboard-districts"],
+    queryFn: () => endpoints.districts().then((res) => res.data)
+  });
+
+  const districtFeatures = asArray(districts.features);
+
+  useEffect(() => {
+    if (selectedDistrictId || !districtFeatures.length) return;
+    const defaultDistrict = districtFeatures.find((feature) => feature.properties?.name === settings?.general?.defaultDistrict) || districtFeatures[0];
+    if (defaultDistrict?.id) updateSelectedDistrict(defaultDistrict.id);
+  }, [districtFeatures, selectedDistrictId, settings?.general?.defaultDistrict]);
+
+  function updateSelectedDistrict(districtId) {
+    setSelectedDistrictId(districtId);
+    localStorage.setItem(selectedDistrictStorageKey, districtId);
+    window.dispatchEvent(new CustomEvent(selectedDistrictEventName, { detail: { districtId } }));
+  }
+
   const { data: dashboardData = {} } = useQuery({
-    queryKey: ["dashboard-page-data"],
+    queryKey: ["dashboard-page-data", selectedDistrictId],
     queryFn: async () => {
-      const [summaryRes, districtRes, sensorRes, alertRes, reportRes, boreholeRes] = await Promise.allSettled([
-        endpoints.dashboardSummary(),
-        endpoints.districts(),
-        endpoints.sensors(),
-        endpoints.alerts({ limit: 5, status: "ACTIVE" }),
-        endpoints.communityReports({ limit: 5 }),
-        endpoints.boreholes()
+      const [summaryRes, sensorRes, alertRes, reportRes, waterSourceRes] = await Promise.allSettled([
+        endpoints.dashboardSummary({ districtId: selectedDistrictId }),
+        endpoints.sensors({ district: selectedDistrictId }),
+        endpoints.alerts({ limit: 5, status: "ACTIVE", districtId: selectedDistrictId }),
+        endpoints.communityReports({ limit: 5, districtId: selectedDistrictId }),
+        endpoints.waterSources({ districtId: selectedDistrictId })
       ]);
       return {
         summary: summaryRes.status === "fulfilled" ? summaryRes.value.data : {},
-        districts: districtRes.status === "fulfilled" ? districtRes.value.data : emptyFeatureCollection,
         sensors: asArray(sensorRes.status === "fulfilled" ? sensorRes.value.data : []),
         alerts: asArray(alertRes.status === "fulfilled" ? alertRes.value.data : []),
         reports: asArray(reportRes.status === "fulfilled" ? reportRes.value.data : []),
-        boreholes: asArray(boreholeRes.status === "fulfilled" ? boreholeRes.value.data : [])
+        waterSources: asArray(waterSourceRes.status === "fulfilled" ? waterSourceRes.value.data?.features : [])
       };
-    }
+    },
+    enabled: Boolean(selectedDistrictId)
   });
 
   const summary = dashboardData.summary || {};
-  const districts = dashboardData.districts || emptyFeatureCollection;
-  const districtFeatures = asArray(districts.features);
-  const selectedDistrict = districtFeatures.find((feature) => feature.properties?.name === settings?.general?.defaultDistrict) || districtFeatures[0];
-  const selectedDistrictId = selectedDistrict?.id;
+  const selectedDistrict = districtFeatures.find((feature) => feature.id === selectedDistrictId) || districtFeatures[0];
   const selectedDistrictName = selectedDistrict?.properties?.name || "Selected area";
+  const selectedDistrictBoundary = selectedDistrict ? { type: "FeatureCollection", features: [selectedDistrict] } : emptyFeatureCollection;
   const mapZoom = settings?.map?.defaultZoom || 9;
   const mapCenter = featureCenter(selectedDistrict) || [settings?.map?.centerLat || -2.25, settings?.map?.centerLng || 37.85];
   const sensors = asArray(dashboardData.sensors);
   const alerts = asArray(dashboardData.alerts);
   const reports = asArray(dashboardData.reports);
-  const boreholes = asArray(dashboardData.boreholes);
-  const onlineSensors = summary.sensors?.online ?? summary.sensorsOnline ?? sensors.filter((sensor) => sensor.status === "ONLINE").length;
-  const totalSensors = summary.sensors?.total ?? summary.sensorsOnline ?? sensors.length;
-  const waterSourceTotal = summary.waterSources?.total ?? boreholes.length;
-  const activeWaterSources = summary.waterSources?.active ?? boreholes.filter((item) => ["FUNCTIONAL", "ACTIVE", "ONLINE"].includes(item.status)).length;
+  const waterSources = asArray(dashboardData.waterSources);
+  const selectedOnlineSensors = sensors.filter((sensor) => sensor.status === "ONLINE").length;
+  const selectedActiveWaterSources = waterSources.filter((item) => item.properties?.status === "ACTIVE").length;
+  const onlineSensors = selectedDistrictId ? selectedOnlineSensors : summary.sensors?.online ?? summary.sensorsOnline ?? selectedOnlineSensors;
+  const totalSensors = selectedDistrictId ? sensors.length : summary.sensors?.total ?? sensors.length;
+  const waterSourceTotal = selectedDistrictId ? waterSources.length : summary.waterSources?.total ?? waterSources.length;
+  const activeWaterSources = selectedDistrictId ? selectedActiveWaterSources : summary.waterSources?.active ?? selectedActiveWaterSources;
   const alertCount = summary.alertsToday ?? summary.activeAlerts ?? alerts.length;
   const recentReports = reports.length ? reports : asArray(summary.recentCommunityReports);
   const riskLevel = summary.droughtRisk?.level || selectedDistrict?.properties?.droughtRiskLevel || "UNKNOWN";
   const droughtScore = summary.droughtRisk?.score ?? 0;
-  const mapPoints = useMemo(() => buildMapPoints({ sensors, reports, boreholes }), [sensors, reports, boreholes]);
+  const mapPoints = useMemo(() => buildMapPoints({ sensors, reports, waterSources }), [sensors, reports, waterSources]);
 
   const { data: rainfallData } = useQuery({
     queryKey: ["dashboard-rainfall", selectedDistrictId],
@@ -143,6 +161,25 @@ export function DashboardPage() {
 
   return (
     <section className="space-y-4 bg-[#F5F6F4] p-4 text-[#17201d] lg:p-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-black/10 bg-white p-4 shadow-sm">
+        <div>
+          <h1 className="text-xl font-bold leading-tight">{selectedDistrictName}</h1>
+          <p className="mt-1 text-sm text-black/60">{settings?.organizationName || "Smart Water"} · {settings?.country || "Kenya"}</p>
+        </div>
+        <label className="block w-full text-sm font-semibold sm:w-80">
+          Region or county
+          <select
+            className="mt-2 w-full rounded-md border border-black/15 bg-white px-3 py-2 text-sm"
+            value={selectedDistrictId}
+            onChange={(event) => updateSelectedDistrict(event.target.value)}
+          >
+            {districtFeatures.map((feature) => (
+              <option key={feature.id} value={feature.id}>{feature.properties?.name || feature.id}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard title="Water Sources" value={waterSourceTotal} subtext={`Active: ${activeWaterSources}`} icon={Droplet} iconClass="bg-blue-500 text-white" />
         <MetricCard title="Active Sensors" value={totalSensors} subtext={`Online: ${onlineSensors}`} icon={Wifi} iconClass="bg-emerald-100 text-emerald-700" />
@@ -153,39 +190,9 @@ export function DashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
-          <div className="grid min-h-[390px] grid-cols-1 bg-white xl:h-[clamp(430px,58vh,620px)] xl:grid-cols-[17rem_minmax(0,1fr)_16rem]">
-            <aside className="z-[500] border-b border-black/10 bg-white/95 p-4 xl:h-full xl:overflow-y-auto xl:border-b-0 xl:border-r">
-              <h1 className="text-xl font-bold leading-tight">{selectedDistrictName}</h1>
-              <p className="mt-1 text-sm text-black/60">{settings?.organizationName || "Smart Water"} · {settings?.country || "Kenya"}</p>
-
-              <label className="mt-4 block text-sm font-semibold">
-                County, shapefile or AOI
-                <select className="mt-2 w-full rounded-md border border-black/15 bg-white px-3 py-2 text-sm">
-                  <option>{selectedDistrictName} shapefile</option>
-                  <option>Select another county</option>
-                  <option>Upload shapefile</option>
-                  <option>Draw desired AOI</option>
-                </select>
-              </label>
-
-              <div className="mt-4 rounded-md border border-dashed border-primary/35 bg-primary/5 p-3">
-                <p className="text-sm font-bold text-primary">Study area</p>
-                <p className="mt-1 text-sm text-black/65">Placeholder for selected county boundary, uploaded shapefile, or drawn area of interest.</p>
-              </div>
-
-              <div className="mt-4">
-                <p className="text-sm font-bold">Map tools</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <ToolButton icon={MousePointer2} label="Select" />
-                  <ToolButton icon={MapPin} label="Pin" />
-                  <ToolButton icon={Ruler} label="Measure" />
-                  <ToolButton icon={Upload} label="Upload" />
-                </div>
-              </div>
-            </aside>
-
+          <div className="grid min-h-[390px] grid-cols-1 bg-white xl:h-[clamp(430px,58vh,620px)] xl:grid-cols-[minmax(0,1fr)_16rem]">
             <div className="relative h-[430px] min-h-[390px] xl:h-full">
-              <DashboardMap districts={districts} points={mapPoints} layers={layers} activeBasemap={activeBasemap} droughtHotspots={droughtHotspots} center={mapCenter} zoom={mapZoom} />
+              <DashboardMap districts={selectedDistrictBoundary} points={mapPoints} layers={layers} activeBasemap={activeBasemap} droughtHotspots={droughtHotspots} center={mapCenter} zoom={mapZoom} />
               <div className="absolute left-4 top-4 z-[500] rounded-md border border-black/10 bg-white/95 px-3 py-2 text-xs font-semibold text-black/70 shadow-sm">
                 Settings: {activeBasemap} · Zoom {mapZoom} · {selectedDistrictName}
               </div>
@@ -224,6 +231,7 @@ export function DashboardPage() {
           <FeedPanel
             title="Latest Alerts"
             action="View all"
+            actionTo="/alerts"
             headerClass="bg-red-500 text-white"
             items={alerts.slice(0, 3).map((alert, index) => ({
               id: alert.id || index,
@@ -237,6 +245,7 @@ export function DashboardPage() {
           <FeedPanel
             title="Recent Reports"
             action="View all"
+            actionTo="/reports"
             items={recentReports.slice(0, 4).map((report, index) => ({
               id: report.id || index,
               title: report.description || report.title,
@@ -345,7 +354,7 @@ function MetricCard({ title, value, subtext, icon: Icon, iconClass = "", danger 
   );
 }
 
-function FeedPanel({ title, action, items, headerClass = "", }) {
+function FeedPanel({ title, action, actionTo, items, headerClass = "", }) {
   return (
     <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
       <div className={`flex items-center justify-between px-4 py-3 ${headerClass || ""}`}>
@@ -353,7 +362,11 @@ function FeedPanel({ title, action, items, headerClass = "", }) {
           {headerClass && <AlertTriangle size={17} />}
           <h2 className="font-bold">{title}</h2>
         </div>
-        <button className="text-xs font-medium opacity-80">{action}</button>
+        {actionTo ? (
+          <Link to={actionTo} className="text-xs font-medium opacity-80 hover:opacity-100">{action}</Link>
+        ) : (
+          <button className="text-xs font-medium opacity-80">{action}</button>
+        )}
       </div>
       <div className="divide-y divide-black/10">
         {items.length ? items.map((item) => {
@@ -433,22 +446,18 @@ function CollapsiblePanel({ title, collapsed, onToggle, children }) {
   );
 }
 
-function ToolButton({ icon: Icon, label }) {
-  return (
-    <button type="button" className="flex items-center gap-2 rounded-md border border-black/10 bg-white px-2 py-2 text-sm font-medium hover:bg-black/[0.03]">
-      <Icon size={15} className="text-primary" />
-      <span>{label}</span>
-    </button>
-  );
-}
-
 function Driver({ icon: Icon, text }) {
   return <p className="mt-1 flex items-center gap-1 text-black/65"><Icon size={12} className="text-red-500" /> {text}</p>;
 }
 
-function buildMapPoints({ sensors, reports, boreholes }) {
+function buildMapPoints({ sensors, reports, waterSources }) {
   return [
-    ...boreholes.map((item) => ({ id: item.id, type: "BOREHOLE", label: item.name || "Borehole", position: geoJsonPointToLatLng(item.location) })),
+    ...waterSources.map((feature) => ({
+      id: feature.properties?.id || feature.id,
+      type: feature.properties?.type || "WATER_POINT",
+      label: feature.properties?.name || feature.properties?.type || "Water source",
+      position: geoJsonPointToLatLng(feature.geometry)
+    })),
     ...sensors.map((item) => ({ id: item.id, type: "SENSOR", label: item.type || "Sensor", position: geoJsonPointToLatLng(item.location) })),
     ...reports.map((item) => ({ id: item.id, type: "REPORT", label: item.description || "Community report", position: geoJsonPointToLatLng(item.location) }))
   ].filter((item) => item.position);

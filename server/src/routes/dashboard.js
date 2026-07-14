@@ -9,9 +9,10 @@ router.get("/summary", async (req, res, next) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const districtTenant = req.tenantId ? { tenantId: req.tenantId } : {};
+    let selectedDistrict = null;
     if (districtId) {
-      const district = await prisma.district.findFirst({ where: { id: districtId, ...districtTenant }, select: { id: true } });
-      if (!district) return res.status(404).json({ error: "District not found" });
+      selectedDistrict = await prisma.district.findFirst({ where: { id: districtId, ...districtTenant }, select: { id: true, droughtRiskLevel: true } });
+      if (!selectedDistrict) return res.status(404).json({ error: "District not found" });
     }
     const whereDistrict = {
       ...(districtId ? { districtId } : {}),
@@ -34,12 +35,14 @@ router.get("/summary", async (req, res, next) => {
         take: 5,
         include: { user: { select: { name: true } }, district: { select: { name: true } } }
       }),
-      prisma.droughtAlert.count({ where: { resolvedAt: null, ...(req.tenantId ? { district: { tenantId: req.tenantId } } : {}) } }),
-      prisma.district.count({ where: { ...districtWhere, droughtRiskLevel: { in: ["WATCH", "WARNING", "EMERGENCY"] } } })
+      prisma.droughtAlert.count({ where: { ...whereDistrict, resolvedAt: null } }),
+      districtId
+        ? prisma.district.count({ where: { id: districtId, ...districtWhere, droughtRiskLevel: { in: ["WATCH", "WARNING", "EMERGENCY"] } } })
+        : prisma.district.count({ where: { ...districtWhere, droughtRiskLevel: { in: ["WATCH", "WARNING", "EMERGENCY"] } } })
     ]);
 
     const riskScore = latestForecast?.riskScore ?? 0;
-    const riskLabel = latestForecast?.riskLabel || (riskScore >= 0.75 ? "HIGH" : riskScore >= 0.5 ? "WARNING" : riskScore > 0 ? "WATCH" : "UNKNOWN");
+    const riskLabel = latestForecast?.riskLabel || selectedDistrict?.droughtRiskLevel || (riskScore >= 0.75 ? "HIGH" : riskScore >= 0.5 ? "WARNING" : riskScore > 0 ? "WATCH" : "UNKNOWN");
 
     res.json({
       waterSources: { total: waterSourcesTotal, active: waterSourcesActive },

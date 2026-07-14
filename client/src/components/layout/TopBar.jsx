@@ -1,4 +1,5 @@
 import { Bell, ChevronDown, Mail, Menu } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export function TopBar({ title = "Dashboard", subtitle = "Selected area", user }) {
   const name = user?.name || user?.email || "User";
@@ -15,7 +16,7 @@ export function TopBar({ title = "Dashboard", subtitle = "Selected area", user }
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <TopIcon icon={Bell} badge="12" label="Notifications" />
+        <TopIcon icon={Bell} badge="12" label="Notifications" to="/alerts" />
         <TopIcon icon={Mail} badge="5" label="Messages" />
         <div className="hidden items-center gap-3 border-l border-black/10 pl-3 sm:flex">
           <div className="grid h-10 w-10 place-items-center rounded-full bg-[#19324c] text-white">{name[0]}</div>
@@ -30,11 +31,26 @@ export function TopBar({ title = "Dashboard", subtitle = "Selected area", user }
   );
 }
 
-function TopIcon({ icon: Icon, badge, label }) {
-  return (
-    <button className="relative grid h-10 w-10 place-items-center rounded-md text-black/70 hover:bg-black/5" aria-label={label} title={label}>
+function TopIcon({ icon: Icon, badge, label, to }) {
+  const className = "relative grid h-10 w-10 place-items-center rounded-md text-black/70 hover:bg-black/5";
+  const content = (
+    <>
       <Icon size={19} />
       <span className="absolute right-1 top-1 rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-4 text-white">{badge}</span>
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link to={to} className={className} aria-label={label} title={label}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" className={className} aria-label={label} title={label}>
+      {content}
     </button>
   );
 }

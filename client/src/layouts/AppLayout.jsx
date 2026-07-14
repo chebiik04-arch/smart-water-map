@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -60,6 +60,9 @@ const pageTitles = {
   "/settings": "Settings"
 };
 
+const selectedDistrictStorageKey = "smart-water-map-selected-district";
+const selectedDistrictEventName = "smart-water-map:district-change";
+
 export function AppLayout() {
   const { user, logout } = useAuthStore();
   const { language, setLanguage } = useLanguageStore();
@@ -67,15 +70,30 @@ export function AppLayout() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("smart-water-map-sidebar") === "collapsed");
+  const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
   const { data: districts } = useQuery({ queryKey: ["layout-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const { data: settings } = usePlatformSettings();
   const visibleLinks = links.filter((link) => !link.admin || user?.role === "admin");
   const title = pageTitles[location.pathname] || "Dashboard";
-  const districtName = settings?.general?.defaultDistrict || districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
+  const selectedDistrict = districts?.features?.find((feature) => feature.id === selectedDistrictId);
+  const districtName = selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
   const organizationName = settings?.organizationName || "Smart Water";
   const country = settings?.country || "Kenya";
   const displayName = user?.name || user?.email || "User";
   const role = user?.role ? user.role.replace("_", " ") : "County Officer";
+
+  useEffect(() => {
+    function handleDistrictChange(event) {
+      setSelectedDistrictId(event.detail?.districtId || localStorage.getItem(selectedDistrictStorageKey) || "");
+    }
+
+    window.addEventListener(selectedDistrictEventName, handleDistrictChange);
+    window.addEventListener("storage", handleDistrictChange);
+    return () => {
+      window.removeEventListener(selectedDistrictEventName, handleDistrictChange);
+      window.removeEventListener("storage", handleDistrictChange);
+    };
+  }, []);
 
   function toggleSidebar() {
     setSidebarCollapsed((current) => {
@@ -204,7 +222,7 @@ export function AppLayout() {
             <select value={language} onChange={(event) => setLanguage(event.target.value)} className="hidden rounded-md border border-black/10 bg-white px-2 py-1.5 text-xs md:block" aria-label="Language">
               {languages.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
             </select>
-            <TopIcon icon={Bell} badge="12" label="Notifications" />
+            <TopIcon icon={Bell} badge="12" label="Notifications" to="/alerts" />
             <TopIcon icon={Mail} badge="5" label="Messages" />
             <div className="hidden items-center gap-3 border-l border-black/10 pl-3 sm:flex">
               <div className="grid h-10 w-10 place-items-center rounded-full bg-[#19324c] text-white">J</div>
@@ -233,11 +251,26 @@ export function AppLayout() {
   );
 }
 
-function TopIcon({ icon: Icon, badge, label }) {
-  return (
-    <button className="relative grid h-10 w-10 place-items-center rounded-md text-black/70 hover:bg-black/5" aria-label={label} title={label}>
+function TopIcon({ icon: Icon, badge, label, to }) {
+  const className = "relative grid h-10 w-10 place-items-center rounded-md text-black/70 hover:bg-black/5";
+  const content = (
+    <>
       <Icon size={19} />
       <span className="absolute right-1 top-1 rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-4 text-white">{badge}</span>
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link to={to} className={className} aria-label={label} title={label}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" className={className} aria-label={label} title={label}>
+      {content}
     </button>
   );
 }

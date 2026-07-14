@@ -62,7 +62,7 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
         zoomControl={false}
         className="z-0"
       >
-        <ZoomControl position="bottomright" />
+        <ZoomControl position="topleft" />
         <TileLayer attribution="&copy; OpenStreetMap contributors" url={basemaps[basemap]} />
         <ScaleControl position="bottomleft" metric imperial={false} />
         {districts && <GeoJSON data={districts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
@@ -93,7 +93,7 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
           return <CircleMarker key={report.id} center={position} radius={6} pathOptions={{ color: "#fff", weight: 2, fillColor: "#FACC15", fillOpacity: 0.95 }}><Popup><strong>{report.description}</strong><p>{report.timeAgo}</p></Popup></CircleMarker>;
         })}
       </MapContainer>
-      <div className="absolute left-4 top-4 z-[500] rounded-md border border-black/10 bg-white/95 px-3 py-2 text-xs font-semibold text-black/70 shadow-sm">
+      <div className="absolute left-4 top-20 z-[500] max-w-[calc(100%-2rem)] rounded-md border border-black/10 bg-white/95 px-3 py-2 text-xs font-semibold text-black/70 shadow-sm">
         {settings?.general?.defaultDistrict || "Selected area"} · {basemap} · Zoom {settings?.map?.defaultZoom || 9}
       </div>
       <MapPanels basemap={basemap} setBasemap={setBasemap} layers={layers} setLayers={setLayers} expanded={expanded} heatOpacity={heatOpacity} setHeatOpacity={setHeatOpacity} showLayerPanel={showLayerPanel} />
@@ -120,12 +120,12 @@ function HeatLayer({ points, opacity }) {
 
 function MapPanels({ basemap, setBasemap, layers, setLayers, expanded, heatOpacity, setHeatOpacity, showLayerPanel }) {
   return (
-    <>
-      <div className="absolute right-4 top-4 z-[500] w-44 rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
+    <div className="absolute right-4 top-4 z-[500] flex max-h-[calc(100%-2rem)] w-52 max-w-[calc(100%-2rem)] flex-col gap-3 overflow-y-auto pr-1">
+      <div className="w-full rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
         <PanelTitle title="Basemap" />
         {Object.keys(basemaps).map((item) => <button key={item} onClick={() => setBasemap(item)} className="mt-2 flex w-full items-center gap-2 text-left text-xs"><span className="h-7 w-7 rounded bg-emerald-100" /><span className="flex-1">{item}</span><span className={`h-3 w-3 rounded-full border ${basemap === item ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} /></button>)}
       </div>
-      {showLayerPanel && <div className="absolute bottom-4 right-4 z-[500] w-52 rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
+      {showLayerPanel && <div className="w-full rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
         <PanelTitle title="Layers" />
         <LayerToggle label="Boreholes" color="bg-blue-500" checked={layers.boreholes} onChange={() => toggle(setLayers, "boreholes")} />
         <LayerToggle label="Water Points" color="bg-emerald-600" checked={layers.water} onChange={() => toggle(setLayers, "water")} />
@@ -137,7 +137,7 @@ function MapPanels({ basemap, setBasemap, layers, setLayers, expanded, heatOpaci
         <LayerToggle label="Community Reports" icon={Droplet} checked={layers.reports} onChange={() => toggle(setLayers, "reports")} />
         {expanded && <label className="mt-3 block text-xs">Heat opacity<input className="mt-1 w-full accent-emerald-700" type="range" min="0" max="1" step="0.05" value={heatOpacity} onChange={(event) => setHeatOpacity(Number(event.target.value))} /></label>}
       </div>}
-    </>
+    </div>
   );
 }
 
