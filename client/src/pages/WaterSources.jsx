@@ -6,6 +6,7 @@ import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { asArray, featuresToProperties } from "../utils/apiData";
+import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
 
 const selectedDistrictStorageKey = "smart-water-map-selected-district";
 const selectedDistrictEventName = "smart-water-map:district-change";
@@ -31,6 +32,7 @@ export function WaterSources() {
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
   const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
+  const { aois, selectedAoiId, selectedAoi, selectedAoiName, updateSelectedAoi } = useAoiSelection();
   const [filters, setFilters] = useState({ search: "", type: "", status: "" });
   const [selected, setSelected] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -46,24 +48,25 @@ export function WaterSources() {
     queryFn: () => endpoints.districts().then((res) => res.data)
   });
   const districtFeatures = asArray(districts.features);
+  const districtId = matchDistrictForAoi(districtFeatures, selectedAoi, selectedDistrictId);
 
   useEffect(() => {
     if (selectedDistrictId || !districtFeatures.length) return;
     updateSelectedDistrict(districtFeatures[0].id);
   }, [districtFeatures, selectedDistrictId]);
 
-  const selectedDistrict = districtFeatures.find((feature) => feature.id === selectedDistrictId);
-  const selectedDistrictName = selectedDistrict?.properties?.name || "Selected region";
+  const selectedDistrict = districtFeatures.find((feature) => feature.id === districtId);
+  const selectedDistrictName = selectedAoiName || selectedDistrict?.properties?.name || "Selected region";
   const selectedCenter = featureCenter(selectedDistrict);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["water-sources-page", selectedDistrictId, filters.type, filters.status],
+    queryKey: ["water-sources-page", districtId, filters.type, filters.status],
     queryFn: () => endpoints.waterSources({
-      districtId: selectedDistrictId,
+      districtId,
       type: filters.type || undefined,
       status: filters.status || undefined
     }).then((res) => res.data),
-    enabled: Boolean(selectedDistrictId)
+    enabled: Boolean(districtId)
   });
 
   const rows = useMemo(() => {
@@ -99,7 +102,7 @@ export function WaterSources() {
       setModalOpen(false);
       setEditingSource(null);
       setSelected(null);
-      setForm(defaultForm(selectedDistrictId, selectedCenter));
+      setForm(defaultForm(districtId, selectedCenter));
       setFormError("");
       setSaveStatus(`${payload.id ? "Updated" : "Added"} ${typeLabels[payload.source.type] || "water source"} successfully.`);
     },
@@ -121,7 +124,7 @@ export function WaterSources() {
 
   function openCreate(type = "BOREHOLE") {
     setEditingSource(null);
-    setForm(defaultForm(selectedDistrictId, selectedCenter, type));
+    setForm(defaultForm(districtId, selectedCenter, type));
     setFormError("");
     setSaveStatus("");
     setModalOpen(true);
@@ -130,7 +133,7 @@ export function WaterSources() {
   function openEdit(source) {
     setSelected(source);
     setEditingSource(source);
-    setForm(formFromSource(source, selectedDistrictId));
+    setForm(formFromSource(source, districtId));
     setFormError("");
     setSaveStatus("");
     setModalOpen(true);
@@ -169,8 +172,8 @@ export function WaterSources() {
         <div className="flex flex-wrap items-end gap-2">
           <label className="block w-64 text-xs font-semibold text-black/60">
             Region or county
-            <select className="mt-1 w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-black" value={selectedDistrictId} onChange={(event) => updateSelectedDistrict(event.target.value)}>
-              {districtFeatures.map((feature) => <option key={feature.id} value={feature.id}>{feature.properties?.name || feature.id}</option>)}
+            <select className="mt-1 w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-black" value={selectedAoiId} onChange={(event) => updateSelectedAoi(event.target.value)}>
+              {aois.map((aoi) => <option key={aoi.id} value={aoi.id}>{aoi.name}</option>)}
             </select>
           </label>
           {canAdd && <button type="button" onClick={() => openCreate("BOREHOLE")} className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700"><Plus size={16} /> Add Source</button>}

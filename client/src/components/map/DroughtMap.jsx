@@ -8,6 +8,7 @@ import { CloudRain, Droplet, Layers, RadioTower, Sprout, Waves } from "lucide-re
 import { endpoints } from "../../services/api";
 import { geoJsonPointToLatLng } from "../../utils/geoHelpers";
 import { asArray } from "../../utils/apiData";
+import { geometryCenter, geometryToFeatureCollection } from "../../utils/aoiGeometry";
 import { usePlatformSettings } from "../../hooks/usePlatformSettings";
 
 const basemaps = {
@@ -22,7 +23,7 @@ const defaultCenter = [
   Number(import.meta.env.VITE_MAP_CENTER_LNG || 37.6)
 ];
 
-export function DroughtMap({ districtId, allLayers = false, expanded = false, onWaterSourceClick, showLayerPanel = true, showLegend = false }) {
+export function DroughtMap({ districtId, aoiGeometry = null, aoiName = "", allLayers = false, expanded = false, onWaterSourceClick, showLayerPanel = true, showLegend = false }) {
   const [basemap, setBasemap] = useState("OpenStreetMap");
   const [heatOpacity, setHeatOpacity] = useState(0.8);
   const [layers, setLayers] = useState({
@@ -52,9 +53,11 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
   const reports = asArray(reportData);
   const heatPoints = asArray(heatmapData);
   const selectedDistrict = asArray(districts?.features).find((feature) => feature.id === districtId);
-  const visibleDistricts = selectedDistrict ? { type: "FeatureCollection", features: [selectedDistrict] } : districts;
-  const selectedCenter = featureCenter(selectedDistrict) || [settings?.map?.centerLat || defaultCenter[0], settings?.map?.centerLng || defaultCenter[1]];
-  const selectedDistrictName = selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || "Selected area";
+  const visibleDistricts = aoiGeometry
+    ? geometryToFeatureCollection(aoiGeometry, aoiName)
+    : selectedDistrict ? { type: "FeatureCollection", features: [selectedDistrict] } : districts;
+  const selectedCenter = geometryCenter(aoiGeometry) || featureCenter(selectedDistrict) || [settings?.map?.centerLat || defaultCenter[0], settings?.map?.centerLng || defaultCenter[1]];
+  const selectedDistrictName = aoiName || selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || "Selected area";
 
   return (
     <div className="relative h-full min-h-[430px]">
@@ -69,6 +72,7 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
         <ZoomControl position="topleft" />
         <TileLayer attribution="&copy; OpenStreetMap contributors" url={basemaps[basemap]} />
         <ScaleControl position="bottomleft" metric imperial={false} />
+        {aoiGeometry && <FitToGeometry geometry={aoiGeometry} />}
         {visibleDistricts && <GeoJSON data={visibleDistricts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
         {layers.ndvi && visibleDistricts && <GeoJSON data={visibleDistricts} style={() => ({ color: "#22C55E", fillColor: "#BBF7D0", fillOpacity: 0.2, weight: 1 })} />}
         {layers.hotspots && <HeatLayer points={heatPoints} opacity={heatOpacity} />}
@@ -87,7 +91,7 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
           })}
         </LayerGroup>
         {layers.sensors && sensors.map((sensor) => {
-          const position = geoJsonPointToLatLng(sensor.location);
+          const position = geoJsonPointToLatLng(sensor.locationGeojson || sensor.location);
           if (!position) return null;
           return <CircleMarker key={sensor.id} center={position} radius={5} pathOptions={{ color: "#fff", weight: 2, fillColor: "#0F766E", fillOpacity: 0.95 }}><Tooltip>{sensor.type}</Tooltip><Popup><strong>{sensor.type}</strong><p>{sensor.status}</p><p>{sensor.lastPing ? new Date(sensor.lastPing).toLocaleString() : "No recent reading"}</p></Popup></CircleMarker>;
         })}
@@ -104,6 +108,19 @@ export function DroughtMap({ districtId, allLayers = false, expanded = false, on
       {showLegend && <MapLegend />}
     </div>
   );
+}
+
+function FitToGeometry({ geometry }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!geometry) return;
+    const layer = L.geoJSON(geometry);
+    const bounds = layer.getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [26, 26], maxZoom: 12 });
+    }
+  }, [geometry, map]);
+  return null;
 }
 
 function HeatLayer({ points, opacity }) {

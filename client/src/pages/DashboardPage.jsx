@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, ZoomControl } from "react-leaflet";
+import L from "leaflet";
+import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, ZoomControl, useMap } from "react-leaflet";
 import {
   AlertTriangle,
   ArrowDown,
@@ -32,8 +33,9 @@ import { endpoints } from "../services/api";
 import { geoJsonPointToLatLng } from "../utils/geoHelpers";
 import { asArray } from "../utils/apiData";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
+import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
+import { geometryCenter, geometryToFeatureCollection } from "../utils/aoiGeometry";
 
-const mapCenter = [-2.25, 37.85];
 const selectedDistrictStorageKey = "smart-water-map-selected-district";
 const selectedDistrictEventName = "smart-water-map:district-change";
 
@@ -62,6 +64,7 @@ export function DashboardPage() {
     reports: true
   });
   const { data: settings } = usePlatformSettings();
+  const { aois, selectedAoiId, selectedAoi, selectedAoiName, selectedAoiGeometry, updateSelectedAoi } = useAoiSelection();
 
   useEffect(() => {
     if (settings?.map?.defaultBasemap) setActiveBasemap(settings.map.defaultBasemap);
@@ -73,6 +76,7 @@ export function DashboardPage() {
   });
 
   const districtFeatures = asArray(districts.features);
+  const districtId = matchDistrictForAoi(districtFeatures, selectedAoi, selectedDistrictId);
 
   useEffect(() => {
     if (selectedDistrictId || !districtFeatures.length) return;
@@ -87,14 +91,14 @@ export function DashboardPage() {
   }
 
   const { data: dashboardData = {} } = useQuery({
-    queryKey: ["dashboard-page-data", selectedDistrictId],
+    queryKey: ["dashboard-page-data", districtId],
     queryFn: async () => {
       const [summaryRes, sensorRes, alertRes, reportRes, waterSourceRes] = await Promise.allSettled([
-        endpoints.dashboardSummary({ districtId: selectedDistrictId }),
-        endpoints.sensors({ district: selectedDistrictId }),
-        endpoints.alerts({ limit: 5, status: "ACTIVE", districtId: selectedDistrictId }),
-        endpoints.communityReports({ limit: 5, districtId: selectedDistrictId }),
-        endpoints.waterSources({ districtId: selectedDistrictId })
+        endpoints.dashboardSummary({ districtId }),
+        endpoints.sensors({ district: districtId }),
+        endpoints.alerts({ limit: 5, status: "ACTIVE", districtId }),
+        endpoints.communityReports({ limit: 5, districtId }),
+        endpoints.waterSources({ districtId })
       ]);
       return {
         summary: summaryRes.status === "fulfilled" ? summaryRes.value.data : {},
@@ -104,25 +108,25 @@ export function DashboardPage() {
         waterSources: asArray(waterSourceRes.status === "fulfilled" ? waterSourceRes.value.data?.features : [])
       };
     },
-    enabled: Boolean(selectedDistrictId)
+    enabled: Boolean(districtId)
   });
 
   const summary = dashboardData.summary || {};
-  const selectedDistrict = districtFeatures.find((feature) => feature.id === selectedDistrictId) || districtFeatures[0];
-  const selectedDistrictName = selectedDistrict?.properties?.name || "Selected area";
-  const selectedDistrictBoundary = selectedDistrict ? { type: "FeatureCollection", features: [selectedDistrict] } : emptyFeatureCollection;
+  const selectedDistrict = districtFeatures.find((feature) => feature.id === districtId) || districtFeatures[0];
+  const selectedDistrictName = selectedAoiName || selectedDistrict?.properties?.name || "Selected area";
+  const selectedDistrictBoundary = selectedAoiGeometry ? geometryToFeatureCollection(selectedAoiGeometry, selectedAoiName) : selectedDistrict ? { type: "FeatureCollection", features: [selectedDistrict] } : emptyFeatureCollection;
   const mapZoom = settings?.map?.defaultZoom || 9;
-  const mapCenter = featureCenter(selectedDistrict) || [settings?.map?.centerLat || -2.25, settings?.map?.centerLng || 37.85];
+  const mapCenter = geometryCenter(selectedAoiGeometry) || featureCenter(selectedDistrict) || [settings?.map?.centerLat || -2.25, settings?.map?.centerLng || 37.85];
   const sensors = asArray(dashboardData.sensors);
   const alerts = asArray(dashboardData.alerts);
   const reports = asArray(dashboardData.reports);
   const waterSources = asArray(dashboardData.waterSources);
-  const selectedOnlineSensors = sensors.filter((sensor) => sensor.status === "ONLINE").length;
+  const selectedOnlineSensors = sensors.filter((sensor) => (sensor.statusCode || sensor.status) === "ONLINE" || sensor.status === "Online").length;
   const selectedActiveWaterSources = waterSources.filter((item) => item.properties?.status === "ACTIVE").length;
-  const onlineSensors = selectedDistrictId ? selectedOnlineSensors : summary.sensors?.online ?? summary.sensorsOnline ?? selectedOnlineSensors;
-  const totalSensors = selectedDistrictId ? sensors.length : summary.sensors?.total ?? sensors.length;
-  const waterSourceTotal = selectedDistrictId ? waterSources.length : summary.waterSources?.total ?? waterSources.length;
-  const activeWaterSources = selectedDistrictId ? selectedActiveWaterSources : summary.waterSources?.active ?? selectedActiveWaterSources;
+  const onlineSensors = districtId ? selectedOnlineSensors : summary.sensors?.online ?? summary.sensorsOnline ?? selectedOnlineSensors;
+  const totalSensors = districtId ? sensors.length : summary.sensors?.total ?? sensors.length;
+  const waterSourceTotal = districtId ? waterSources.length : summary.waterSources?.total ?? waterSources.length;
+  const activeWaterSources = districtId ? selectedActiveWaterSources : summary.waterSources?.active ?? selectedActiveWaterSources;
   const alertCount = summary.alertsToday ?? summary.activeAlerts ?? alerts.length;
   const recentReports = reports.length ? reports : asArray(summary.recentCommunityReports);
   const riskLevel = summary.droughtRisk?.level || selectedDistrict?.properties?.droughtRiskLevel || "UNKNOWN";
@@ -130,29 +134,29 @@ export function DashboardPage() {
   const mapPoints = useMemo(() => buildMapPoints({ sensors, reports, waterSources }), [sensors, reports, waterSources]);
 
   const { data: rainfallData } = useQuery({
-    queryKey: ["dashboard-rainfall", selectedDistrictId],
-    queryFn: () => endpoints.rainfallSeries(selectedDistrictId, { calendarYear: true }).then((res) => res.data),
-    enabled: Boolean(selectedDistrictId)
+    queryKey: ["dashboard-rainfall", districtId],
+    queryFn: () => endpoints.rainfallSeries(districtId, { calendarYear: true }).then((res) => res.data),
+    enabled: Boolean(districtId)
   });
   const { data: ndviData } = useQuery({
-    queryKey: ["dashboard-ndvi", selectedDistrictId],
-    queryFn: () => endpoints.ndviSeries(selectedDistrictId, { calendarYear: true }).then((res) => res.data),
-    enabled: Boolean(selectedDistrictId)
+    queryKey: ["dashboard-ndvi", districtId],
+    queryFn: () => endpoints.ndviSeries(districtId, { calendarYear: true }).then((res) => res.data),
+    enabled: Boolean(districtId)
   });
   const { data: groundwaterData } = useQuery({
-    queryKey: ["dashboard-groundwater", selectedDistrictId],
-    queryFn: () => endpoints.groundwaterSeries(selectedDistrictId, { calendarYear: true }).then((res) => res.data),
-    enabled: Boolean(selectedDistrictId)
+    queryKey: ["dashboard-groundwater", districtId],
+    queryFn: () => endpoints.groundwaterSeries(districtId, { calendarYear: true }).then((res) => res.data),
+    enabled: Boolean(districtId)
   });
   const { data: forecast } = useQuery({
-    queryKey: ["dashboard-forecast", selectedDistrictId],
-    queryFn: () => endpoints.latestForecast(selectedDistrictId).then((res) => res.data),
-    enabled: Boolean(selectedDistrictId)
+    queryKey: ["dashboard-forecast", districtId],
+    queryFn: () => endpoints.latestForecast(districtId).then((res) => res.data),
+    enabled: Boolean(districtId)
   });
   const { data: heatmapData } = useQuery({
-    queryKey: ["dashboard-heatmap", selectedDistrictId],
-    queryFn: () => endpoints.droughtHeatmap({ districtId: selectedDistrictId }).then((res) => res.data),
-    enabled: Boolean(selectedDistrictId)
+    queryKey: ["dashboard-heatmap", districtId],
+    queryFn: () => endpoints.droughtHeatmap({ districtId }).then((res) => res.data),
+    enabled: Boolean(districtId)
   });
   const rainfallTrend = asArray(rainfallData).map((row) => ({ label: row.month || row.label, value: row.mmTotal ?? row.value ?? 0 }));
   const ndviTrend = asArray(ndviData).map((row) => ({ label: row.month || row.label, value: row.value ?? 0 }));
@@ -170,11 +174,11 @@ export function DashboardPage() {
           Region or county
           <select
             className="mt-2 w-full rounded-md border border-black/15 bg-white px-3 py-2 text-sm"
-            value={selectedDistrictId}
-            onChange={(event) => updateSelectedDistrict(event.target.value)}
+            value={selectedAoiId}
+            onChange={(event) => updateSelectedAoi(event.target.value)}
           >
-            {districtFeatures.map((feature) => (
-              <option key={feature.id} value={feature.id}>{feature.properties?.name || feature.id}</option>
+            {aois.map((aoi) => (
+              <option key={aoi.id} value={aoi.id}>{aoi.name}</option>
             ))}
           </select>
         </label>
@@ -307,6 +311,7 @@ function DashboardMap({ districts, points, layers, activeBasemap, droughtHotspot
         attribution={basemapAttribution(activeBasemap)}
         url={basemapUrl(activeBasemap)}
       />
+      {districts && <FitMapToGeoJson data={districts} />}
       {layers.rainfall && (
         <GeoJSON
           key="rainfall-layer"
@@ -354,6 +359,19 @@ function DashboardMap({ districts, points, layers, activeBasemap, droughtHotspot
       ))}
     </MapContainer>
   );
+}
+
+function FitMapToGeoJson({ data }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!data) return;
+    const layer = L.geoJSON(data);
+    const bounds = layer.getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [26, 26], maxZoom: 12 });
+    }
+  }, [data, map]);
+  return null;
 }
 
 function MetricCard({ title, value, subtext, icon: Icon, iconClass = "", danger = false, compact = false }) {
@@ -473,7 +491,7 @@ function buildMapPoints({ sensors, reports, waterSources }) {
       label: feature.properties?.name || feature.properties?.type || "Water source",
       position: geoJsonPointToLatLng(feature.geometry)
     })),
-    ...sensors.map((item) => ({ id: item.id, type: "SENSOR", label: item.type || "Sensor", position: geoJsonPointToLatLng(item.location) })),
+    ...sensors.map((item) => ({ id: item.id, type: "SENSOR", label: item.type || "Sensor", position: geoJsonPointToLatLng(item.locationGeojson || item.location) })),
     ...reports.map((item) => ({ id: item.id, type: "REPORT", label: item.description || "Community report", position: geoJsonPointToLatLng(item.location) }))
   ].filter((item) => item.position);
 }

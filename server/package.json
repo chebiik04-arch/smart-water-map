@@ -13,7 +13,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "seed:aois": "node prisma/seedAois.js",
+    "seed:aoi-data": "node prisma/seedAoiData.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1070.0",

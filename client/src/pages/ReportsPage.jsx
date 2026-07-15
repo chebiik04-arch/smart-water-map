@@ -7,6 +7,7 @@ import { useAuthStore } from "../stores/authStore";
 import { asArray } from "../utils/apiData";
 import { compressPhoto, getGpsPosition } from "../utils/photoEvidence";
 import { getQueuedReports, queueReport, syncQueuedReports } from "../utils/offlineReports";
+import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
 
 const initialForm = { districtId: "", latitude: "", longitude: "", waterLevel: "", description: "", photoUrl: "", gpsAccuracyMeters: "", photoMetadata: null };
 
@@ -17,6 +18,7 @@ export function ReportsPage() {
   const [form, setForm] = useState(initialForm);
   const [queuedCount, setQueuedCount] = useState(0);
   const [status, setStatus] = useState("");
+  const { selectedAoi, selectedAoiName, selectedAoiGeometry } = useAoiSelection();
   const canVerify = useMemo(() => ["admin", "field_agent"].includes(user?.role), [user]);
 
   const { data: reportData, refetch: refetchReports } = useQuery({
@@ -37,7 +39,9 @@ export function ReportsPage() {
   });
 
   const reports = asArray(reportData);
-  const districts = asArray(districtData?.features).map((feature) => ({ id: feature.id, name: feature.properties?.name }));
+  const districtFeatures = asArray(districtData?.features);
+  const districts = districtFeatures.map((feature) => ({ id: feature.id, name: feature.properties?.name }));
+  const reportMapDistrictId = matchDistrictForAoi(districtFeatures, selectedAoi);
   const visibleReports = reports.filter((report) => tab === "pending" ? report.status !== "VERIFIED" : report.status === "VERIFIED");
   const stats = {
     total: reports.length,
@@ -139,7 +143,7 @@ export function ReportsPage() {
         </section>
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
           <div className="border-b border-black/10 p-4"><h2 className="text-sm font-bold">Report Locations</h2></div>
-          <div className="h-[360px]"><DroughtMap showLayerPanel={false} showLegend /></div>
+          <div className="h-[360px]"><DroughtMap districtId={reportMapDistrictId} aoiGeometry={selectedAoiGeometry} aoiName={selectedAoiName} showLayerPanel={false} showLegend /></div>
         </section>
       </div>
 

@@ -5,6 +5,7 @@ import { Pagination, usePagination } from "../components/Pagination";
 import { TimeSeriesChart } from "../components/TimeSeriesChart";
 import { endpoints } from "../services/api";
 import { asArray, featuresToProperties } from "../utils/apiData";
+import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
 
 const selectedDistrictStorageKey = "smart-water-map-selected-district";
 const selectedDistrictEventName = "smart-water-map:district-change";
@@ -13,11 +14,13 @@ const emptyFeatureCollection = { type: "FeatureCollection", features: [] };
 export function WaterMap() {
   const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
   const [selectedSource, setSelectedSource] = useState(null);
+  const { aois, selectedAoiId, selectedAoi, selectedAoiName, selectedAoiGeometry, updateSelectedAoi } = useAoiSelection();
   const { data: districts = emptyFeatureCollection } = useQuery({
     queryKey: ["water-map-districts"],
     queryFn: () => endpoints.districts().then((res) => res.data)
   });
   const districtFeatures = asArray(districts.features);
+  const districtId = matchDistrictForAoi(districtFeatures, selectedAoi, selectedDistrictId);
 
   useEffect(() => {
     if (selectedDistrictId || !districtFeatures.length) return;
@@ -32,14 +35,13 @@ export function WaterMap() {
   }
 
   const { data: sources } = useQuery({
-    queryKey: ["water-map-sources", selectedDistrictId],
-    queryFn: () => endpoints.waterSources({ districtId: selectedDistrictId }).then((res) => res.data),
-    enabled: Boolean(selectedDistrictId)
+    queryKey: ["water-map-sources", districtId],
+    queryFn: () => endpoints.waterSources({ districtId }).then((res) => res.data),
+    enabled: Boolean(districtId)
   });
   const rows = useMemo(() => featuresToProperties(sources), [sources]);
   const waterPointsPagination = usePagination(rows, 6);
-  const selectedDistrict = districtFeatures.find((feature) => feature.id === selectedDistrictId);
-  const selectedDistrictName = selectedDistrict?.properties?.name || "Selected region";
+  const selectedDistrictName = selectedAoiName || "Selected region";
 
   return (
     <section className="space-y-4 p-4 lg:p-5">
@@ -52,17 +54,20 @@ export function WaterMap() {
           Region or county
           <select
             className="mt-2 w-full rounded-md border border-black/15 bg-white px-3 py-2 text-sm"
-            value={selectedDistrictId}
-            onChange={(event) => updateSelectedDistrict(event.target.value)}
+            value={selectedAoiId}
+            onChange={(event) => {
+              updateSelectedAoi(event.target.value);
+              setSelectedSource(null);
+            }}
           >
-            {districtFeatures.map((feature) => (
-              <option key={feature.id} value={feature.id}>{feature.properties?.name || feature.id}</option>
+            {aois.map((aoi) => (
+              <option key={aoi.id} value={aoi.id}>{aoi.name}</option>
             ))}
           </select>
         </label>
       </div>
       <div className="h-[470px] overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
-        <DroughtMap districtId={selectedDistrictId} allLayers showLayerPanel={false} showLegend onWaterSourceClick={setSelectedSource} />
+        <DroughtMap districtId={districtId} aoiGeometry={selectedAoiGeometry} aoiName={selectedAoiName} allLayers showLayerPanel={false} showLegend onWaterSourceClick={setSelectedSource} />
       </div>
       <div className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-black/10 p-4">

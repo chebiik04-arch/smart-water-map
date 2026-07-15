@@ -16,6 +16,7 @@ import { DroughtMap } from "../components/map/DroughtMap";
 import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
+import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
 
 const selectedDistrictStorageKey = "smart-water-map-selected-district";
 const selectedDistrictEventName = "smart-water-map:district-change";
@@ -23,6 +24,7 @@ const normalMonthlyRainfallMm = 75;
 
 export function OperationsPage() {
   const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
+  const { aois, selectedAoiId, selectedAoi, selectedAoiName, selectedAoiGeometry, updateSelectedAoi } = useAoiSelection();
   const { data: districts } = useQuery({ queryKey: ["districts-rainfall"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const districtFeatures = asArray(districts?.features);
 
@@ -30,9 +32,9 @@ export function OperationsPage() {
     if (!selectedDistrictId && districtFeatures[0]?.id) updateSelectedDistrict(districtFeatures[0].id);
   }, [districtFeatures, selectedDistrictId]);
 
-  const districtId = selectedDistrictId || districtFeatures[0]?.id;
+  const districtId = matchDistrictForAoi(districtFeatures, selectedAoi, selectedDistrictId);
   const selectedDistrict = districtFeatures.find((item) => item.id === districtId) || districtFeatures[0];
-  const districtName = selectedDistrict?.properties?.name || "Selected district";
+  const districtName = selectedAoiName || selectedDistrict?.properties?.name || "Selected district";
 
   const { data } = useQuery({
     queryKey: ["rainfall-page", districtId],
@@ -72,10 +74,10 @@ export function OperationsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <select
             className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold shadow-sm"
-            value={districtId || ""}
-            onChange={(event) => updateSelectedDistrict(event.target.value)}
+            value={selectedAoiId}
+            onChange={(event) => updateSelectedAoi(event.target.value)}
           >
-            {districtFeatures.map((feature) => <option key={feature.id} value={feature.id}>{feature.properties?.name || feature.id}</option>)}
+            {aois.map((aoi) => <option key={aoi.id} value={aoi.id}>{aoi.name}</option>)}
           </select>
           <button className="inline-flex items-center gap-2 rounded-md border border-blue-100 bg-white px-3 py-2 text-sm font-bold text-blue-600 shadow-sm">
             <CloudRain size={16} /> Last 30 days
@@ -96,7 +98,7 @@ export function OperationsPage() {
             <MapLegend />
           </PanelHeader>
           <div className="h-[430px]">
-            <DroughtMap districtId={districtId} allLayers showLayerPanel={false} />
+            <DroughtMap districtId={districtId} aoiGeometry={selectedAoiGeometry} aoiName={selectedAoiName} allLayers showLayerPanel={false} />
           </div>
         </section>
 

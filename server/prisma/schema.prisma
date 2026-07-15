@@ -207,11 +207,25 @@ model User {
   createdAt        DateTime          @default(now())
   communityReports CommunityReport[]
   moderationActions ReportModeration[]
+  aois             Aoi[]
 
   @@index([tenantId])
   @@index([role])
   @@index([status])
   @@index([district])
+}
+
+model Aoi {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      String
+  geometry  Json
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  creator   User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([createdBy])
+  @@map("aois")
 }
 
 model District {

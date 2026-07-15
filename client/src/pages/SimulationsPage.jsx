@@ -15,6 +15,7 @@ import { DroughtMap } from "../components/map/DroughtMap";
 import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
+import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
 
 const selectedDistrictStorageKey = "smart-water-map-selected-district";
 const selectedDistrictEventName = "smart-water-map:district-change";
@@ -22,6 +23,7 @@ const selectedDistrictEventName = "smart-water-map:district-change";
 export function SimulationsPage() {
   const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
   const [rainfallDropPercent, setRainfallDropPercent] = useState(30);
+  const { aois, selectedAoiId, selectedAoi, selectedAoiName, selectedAoiGeometry, updateSelectedAoi } = useAoiSelection();
   const { data: districts } = useQuery({ queryKey: ["drought-forecast-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const districtFeatures = asArray(districts?.features);
 
@@ -29,9 +31,9 @@ export function SimulationsPage() {
     if (!selectedDistrictId && districtFeatures[0]?.id) updateSelectedDistrict(districtFeatures[0].id);
   }, [districtFeatures, selectedDistrictId]);
 
-  const districtId = selectedDistrictId || districtFeatures[0]?.id;
+  const districtId = matchDistrictForAoi(districtFeatures, selectedAoi, selectedDistrictId);
   const selectedDistrict = districtFeatures.find((feature) => feature.id === districtId) || districtFeatures[0];
-  const districtName = selectedDistrict?.properties?.name || "Selected district";
+  const districtName = selectedAoiName || selectedDistrict?.properties?.name || "Selected district";
 
   const { data: forecast } = useQuery({
     queryKey: ["forecast-page-latest", districtId],
@@ -61,8 +63,8 @@ export function SimulationsPage() {
           <p className="mt-1 text-sm font-medium text-black/55">AI-powered 30-day risk projection - {districtName}, Kenya</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold shadow-sm" value={districtId || ""} onChange={(event) => updateSelectedDistrict(event.target.value)}>
-            {districtFeatures.map((feature) => <option key={feature.id} value={feature.id}>{feature.properties?.name || feature.id}</option>)}
+          <select className="rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold shadow-sm" value={selectedAoiId} onChange={(event) => updateSelectedAoi(event.target.value)}>
+            {aois.map((aoi) => <option key={aoi.id} value={aoi.id}>{aoi.name}</option>)}
           </select>
           <label className="inline-flex items-center gap-2 rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-semibold shadow-sm">
             <span>Rainfall drop</span>
@@ -135,7 +137,7 @@ export function SimulationsPage() {
             <Legend />
           </PanelHeader>
           <div className="relative h-[430px]">
-            <DroughtMap districtId={districtId} allLayers showLayerPanel={false} />
+            <DroughtMap districtId={districtId} aoiGeometry={selectedAoiGeometry} aoiName={selectedAoiName} allLayers showLayerPanel={false} />
             <IntensityScale />
           </div>
         </section>

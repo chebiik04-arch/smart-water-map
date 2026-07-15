@@ -21,6 +21,7 @@ import tenantRoutes from "./tenants.js";
 import uploadRoutes from "./uploads.js";
 import providerSensorRoutes from "./providerSensors.js";
 import settingsRoutes from "./settings.js";
+import aoiRoutes from "./aois.js";
 import { attachTenant } from "../middleware/tenant.js";
 
 const router = Router();
@@ -50,5 +51,6 @@ router.use("/tenants", tenantRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/provider/sensors", providerSensorRoutes);
 router.use("/settings", settingsRoutes);
+router.use("/aois", aoiRoutes);
 
 export default router;

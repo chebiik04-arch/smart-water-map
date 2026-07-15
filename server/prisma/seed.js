@@ -1,11 +1,16 @@
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { generateApiKey, hashApiKey, keyPrefix } from "../src/utils/apiKeys.js";
 import { buildIrrigationAdvice } from "../src/services/irrigationAdvisor.js";
 import { marketDecisionHint } from "../src/services/marketPrices.js";
+import { loadCountyAoisFromShapefile } from "../src/services/shapefileParser.js";
 
 const prisma = new PrismaClient();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(__dirname, "../..");
 
 const districts = [
   {
@@ -68,6 +73,7 @@ const sensorTypes = ["GROUNDWATER", "SOIL_MOISTURE", "RAINFALL", "WEATHER"];
 
 async function main() {
   await clearData();
+  await seedCountyAois();
 
   const tenant = await prisma.tenant.create({
     data: { name: "Kenya Drought Response Pilot", slug: "kenya-pilot", country: "Kenya" }
@@ -275,6 +281,36 @@ async function clearData() {
   await prisma.$executeRaw`DELETE FROM "District"`;
   await prisma.user.deleteMany();
   await prisma.tenant.deleteMany();
+}
+
+async function seedCountyAois() {
+  const shpPath = path.join(projectRoot, "counties", "County.shp");
+  const dbfPath = path.join(projectRoot, "counties", "County.dbf");
+
+  try {
+    const countyAois = await loadCountyAoisFromShapefile({ shpPath, dbfPath });
+    for (const county of countyAois) {
+      const [existing] = await prisma.$queryRaw`
+        SELECT id FROM "aois" WHERE LOWER("name") = LOWER(${county.name}) LIMIT 1
+      `;
+
+      if (existing) {
+        await prisma.$executeRaw`
+          UPDATE "aois"
+          SET "type" = 'county', "geometry" = ${JSON.stringify(county.geometry)}::jsonb
+          WHERE id = ${existing.id}
+        `;
+      } else {
+        await prisma.$executeRaw`
+          INSERT INTO "aois" ("name", "type", "geometry")
+          VALUES (${county.name}, 'county', ${JSON.stringify(county.geometry)}::jsonb)
+        `;
+      }
+    }
+    console.info(`Seeded ${countyAois.length} county AOIs`);
+  } catch (error) {
+    console.warn(`County AOI seed skipped: ${error.message}`);
+  }
 }
 
 async function seedCropVarieties(tenantId) {

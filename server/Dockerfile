@@ -6,9 +6,9 @@ COPY server/package.json server/package.json
 RUN npm ci --workspace server --include-workspace-root
 
 COPY server server
+COPY counties counties
 RUN npm run prisma:generate --workspace server
 
 WORKDIR /app/server
 EXPOSE 4000
 CMD ["npm", "run", "start"]
-

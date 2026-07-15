@@ -11,6 +11,7 @@ import {
   Gauge,
   LogOut,
   Map,
+  MapPin,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,6 +25,7 @@ import { useAuthStore } from "../stores/authStore";
 import { WeatherWidget } from "../components/layout/WeatherWidget";
 import { endpoints } from "../services/api";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
+import { selectedAoiEventName, selectedAoiStorageKey } from "../hooks/useAoiSelection";
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
@@ -35,6 +37,7 @@ const links = [
   { to: "/simulations", label: "Drought Forecast", icon: Binary },
   { to: "/alerts", label: "Alerts", icon: AlertTriangle, badge: "12" },
   { to: "/reports", label: "Community Reports", icon: Users },
+  { to: "/location-settings", label: "Location Settings", icon: MapPin },
   { to: "/developers", label: "Reports", icon: FileText, admin: true },
   { to: "/admin/users", label: "Users", icon: Users, admin: true },
   { to: "/settings", label: "Settings", icon: Settings }
@@ -49,6 +52,7 @@ const pageTitles = {
   "/operations": "Rainfall",
   "/alerts": "Alerts",
   "/reports": "Community Reports",
+  "/location-settings": "Location Settings",
   "/forecasts": "Vegetation (NDVI)",
   "/advisory": "Water Sources",
   "/simulations": "Drought Forecast",
@@ -68,13 +72,16 @@ export function AppLayout() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("smart-water-map-sidebar") === "collapsed");
   const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
+  const [selectedAoiId, setSelectedAoiId] = useState(() => localStorage.getItem(selectedAoiStorageKey) || "");
   const { data: districts } = useQuery({ queryKey: ["layout-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
+  const { data: aois = [] } = useQuery({ queryKey: ["aois"], queryFn: () => endpoints.aois().then((res) => res.data) });
   const { data: notificationData } = useQuery({ queryKey: ["layout-notifications"], queryFn: () => endpoints.alerts({ limit: 5, status: "ACTIVE" }).then((res) => res.data) });
   const { data: settings } = usePlatformSettings();
   const visibleLinks = links.filter((link) => !link.admin || user?.role === "admin");
   const title = pageTitles[location.pathname] || "Dashboard";
   const selectedDistrict = districts?.features?.find((feature) => feature.id === selectedDistrictId);
-  const districtName = selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
+  const selectedAoi = aois.find((aoi) => String(aoi.id) === String(selectedAoiId));
+  const districtName = selectedAoi?.name || selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
   const organizationName = settings?.organizationName || "Smart Water";
   const country = settings?.country || "Kenya";
   const displayName = user?.name || user?.email || "User";
@@ -91,6 +98,19 @@ export function AppLayout() {
     return () => {
       window.removeEventListener(selectedDistrictEventName, handleDistrictChange);
       window.removeEventListener("storage", handleDistrictChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleAoiChange(event) {
+      setSelectedAoiId(event.detail?.aoiId || localStorage.getItem(selectedAoiStorageKey) || "");
+    }
+
+    window.addEventListener(selectedAoiEventName, handleAoiChange);
+    window.addEventListener("storage", handleAoiChange);
+    return () => {
+      window.removeEventListener(selectedAoiEventName, handleAoiChange);
+      window.removeEventListener("storage", handleAoiChange);
     };
   }, []);
 
