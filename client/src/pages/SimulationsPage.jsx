@@ -101,12 +101,24 @@ export function SimulationsPage() {
           <div className="mt-4">
             <ResponsiveContainer width="100%" height={205}>
               <BarChart data={weeklyTrend} barCategoryGap="45%">
+                <defs>
+                  <linearGradient id="weeklyRiskGradient" x1="0" x2="0" y1="1" y2="0">
+                    <stop offset="0%" stopColor="#FED7AA" />
+                    <stop offset="48%" stopColor="#F97316" />
+                    <stop offset="100%" stopColor="#DC2626" />
+                  </linearGradient>
+                  <linearGradient id="weeklyExtremeGradient" x1="0" x2="0" y1="1" y2="0">
+                    <stop offset="0%" stopColor="#FEE2E2" />
+                    <stop offset="46%" stopColor="#EF4444" />
+                    <stop offset="100%" stopColor="#7F1D1D" />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid stroke="#EDF0ED" vertical={false} />
                 <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
                 <ChartTooltip />
                 <Bar dataKey="risk" name="Risk %" radius={[5, 5, 0, 0]}>
-                  {weeklyTrend.map((entry) => <Cell key={entry.week} fill={entry.risk >= 80 ? "#EF4444" : "#F97316"} />)}
+                  {weeklyTrend.map((entry) => <Cell key={entry.week} fill={entry.risk >= 80 ? "url(#weeklyExtremeGradient)" : "url(#weeklyRiskGradient)"} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -120,8 +132,9 @@ export function SimulationsPage() {
           <PanelHeader title="Spatial Drought Risk Map">
             <Legend />
           </PanelHeader>
-          <div className="h-[430px]">
+          <div className="relative h-[430px]">
             <DroughtMap districtId={districtId} allLayers showLayerPanel={false} />
+            <IntensityScale />
           </div>
         </section>
 
@@ -183,8 +196,29 @@ function PanelHeader({ title, children }) {
 }
 
 function Legend() {
-  const items = [["Extreme", "bg-red-900"], ["High", "bg-red-600"], ["Moderate", "bg-orange-500"], ["Low", "bg-yellow-300"]];
-  return <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-black/60">{items.map(([label, color]) => <span key={label} className="flex items-center gap-1.5"><span className={`h-3 w-3 rounded-full ${color}`} />{label}</span>)}</div>;
+  const items = [
+    ["Extreme", "from-red-200 via-red-600 to-red-950"],
+    ["High", "from-orange-100 via-orange-500 to-red-700"],
+    ["Moderate", "from-yellow-100 via-yellow-400 to-orange-500"],
+    ["Low", "from-emerald-50 via-lime-200 to-yellow-300"]
+  ];
+  return <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-black/60">{items.map(([label, color]) => <span key={label} className="flex items-center gap-1.5"><span className={`h-4 w-3 rounded-full bg-gradient-to-t ${color}`} />{label}</span>)}</div>;
+}
+
+function IntensityScale() {
+  return (
+    <div className="absolute bottom-4 right-4 z-[500] rounded-md border border-black/10 bg-white/95 p-3 text-xs font-bold text-black/60 shadow-sm">
+      <div className="grid grid-cols-[0.75rem_1fr] gap-2">
+        <span className="h-32 rounded-full bg-gradient-to-t from-yellow-100 via-orange-500 to-red-950" />
+        <div className="flex h-32 flex-col justify-between">
+          <span>Extreme</span>
+          <span>High</span>
+          <span>Moderate</span>
+          <span>Low</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function RiskRow({ row }) {
@@ -246,10 +280,10 @@ function riskText(percent) {
 }
 
 function riskLevel(percent) {
-  if (percent >= 85) return { label: "Extreme", bar: "bg-red-600", badge: "bg-red-100 text-red-600" };
-  if (percent >= 65) return { label: "High", bar: "bg-orange-500", badge: "bg-orange-100 text-orange-700" };
-  if (percent >= 45) return { label: "Moderate", bar: "bg-yellow-400", badge: "bg-yellow-100 text-yellow-700" };
-  return { label: "Low", bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700" };
+  if (percent >= 85) return { label: "Extreme", bar: "bg-gradient-to-t from-red-200 via-red-600 to-red-950", badge: "bg-red-100 text-red-600" };
+  if (percent >= 65) return { label: "High", bar: "bg-gradient-to-t from-orange-100 via-orange-500 to-red-700", badge: "bg-orange-100 text-orange-700" };
+  if (percent >= 45) return { label: "Moderate", bar: "bg-gradient-to-t from-yellow-100 via-yellow-400 to-orange-500", badge: "bg-yellow-100 text-yellow-700" };
+  return { label: "Low", bar: "bg-gradient-to-t from-emerald-50 via-lime-200 to-yellow-300", badge: "bg-emerald-100 text-emerald-700" };
 }
 
 function severityClass(severity) {
