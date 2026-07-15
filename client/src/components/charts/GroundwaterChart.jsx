@@ -6,7 +6,7 @@ import { asArray } from "../../utils/apiData";
 export function GroundwaterChart({ districtId }) {
   const { data, isLoading } = useQuery({
     queryKey: ["groundwater", districtId],
-    queryFn: () => endpoints.groundwaterSeries(districtId, { months: 6 }).then((res) => res.data),
+    queryFn: () => endpoints.groundwaterSeries(districtId, { calendarYear: true }).then((res) => res.data),
     enabled: Boolean(districtId)
   });
   const rows = asArray(data);

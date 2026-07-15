@@ -10,7 +10,6 @@ import {
   FileText,
   Gauge,
   LogOut,
-  Mail,
   Map,
   Menu,
   PanelLeftClose,
@@ -22,8 +21,6 @@ import {
   Users
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
-import { useLanguageStore } from "../stores/languageStore";
-import { languages } from "../i18n/translations";
 import { WeatherWidget } from "../components/layout/WeatherWidget";
 import { endpoints } from "../services/api";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
@@ -65,13 +62,14 @@ const selectedDistrictEventName = "smart-water-map:district-change";
 
 export function AppLayout() {
   const { user, logout } = useAuthStore();
-  const { language, setLanguage } = useLanguageStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("smart-water-map-sidebar") === "collapsed");
   const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
   const { data: districts } = useQuery({ queryKey: ["layout-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
+  const { data: notificationData } = useQuery({ queryKey: ["layout-notifications"], queryFn: () => endpoints.alerts({ limit: 5, status: "ACTIVE" }).then((res) => res.data) });
   const { data: settings } = usePlatformSettings();
   const visibleLinks = links.filter((link) => !link.admin || user?.role === "admin");
   const title = pageTitles[location.pathname] || "Dashboard";
@@ -81,6 +79,7 @@ export function AppLayout() {
   const country = settings?.country || "Kenya";
   const displayName = user?.name || user?.email || "User";
   const role = user?.role ? user.role.replace("_", " ") : "County Officer";
+  const notifications = Array.isArray(notificationData) ? notificationData : [];
 
   useEffect(() => {
     function handleDistrictChange(event) {
@@ -94,6 +93,10 @@ export function AppLayout() {
       window.removeEventListener("storage", handleDistrictChange);
     };
   }, []);
+
+  useEffect(() => {
+    setNotificationsOpen(false);
+  }, [location.pathname]);
 
   function toggleSidebar() {
     setSidebarCollapsed((current) => {
@@ -219,11 +222,11 @@ export function AppLayout() {
           </div>
 
           <div className="flex items-center gap-3">
-            <select value={language} onChange={(event) => setLanguage(event.target.value)} className="hidden rounded-md border border-black/10 bg-white px-2 py-1.5 text-xs md:block" aria-label="Language">
-              {languages.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
-            </select>
-            <TopIcon icon={Bell} badge="12" label="Notifications" to="/alerts" />
-            <TopIcon icon={Mail} badge="5" label="Messages" />
+            <NotificationMenu
+              open={notificationsOpen}
+              onToggle={() => setNotificationsOpen((current) => !current)}
+              notifications={notifications}
+            />
             <div className="hidden items-center gap-3 border-l border-black/10 pl-3 sm:flex">
               <div className="grid h-10 w-10 place-items-center rounded-full bg-[#19324c] text-white">J</div>
               <div className="leading-tight">
@@ -251,26 +254,50 @@ export function AppLayout() {
   );
 }
 
-function TopIcon({ icon: Icon, badge, label, to }) {
-  const className = "relative grid h-10 w-10 place-items-center rounded-md text-black/70 hover:bg-black/5";
-  const content = (
-    <>
-      <Icon size={19} />
-      <span className="absolute right-1 top-1 rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-4 text-white">{badge}</span>
-    </>
-  );
-
-  if (to) {
-    return (
-      <Link to={to} className={className} aria-label={label} title={label}>
-        {content}
-      </Link>
-    );
-  }
-
+function NotificationMenu({ open, onToggle, notifications }) {
+  const count = notifications.length;
   return (
-    <button type="button" className={className} aria-label={label} title={label}>
-      {content}
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        className="relative grid h-10 w-10 place-items-center rounded-md text-black/70 hover:bg-black/5"
+        aria-label="Notifications"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title="Notifications"
+        onClick={onToggle}
+      >
+        <Bell size={19} />
+        {count > 0 && <span className="absolute right-1 top-1 rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-4 text-white">{count}</span>}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-lg border border-black/10 bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-black/10 px-4 py-3">
+            <h2 className="text-sm font-bold">Notifications</h2>
+            <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-bold text-red-600">{count} active</span>
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {notifications.length ? notifications.map((item) => (
+              <Link key={item.id} to="/alerts" className="block border-b border-black/5 px-4 py-3 hover:bg-black/[0.03]">
+                <p className="line-clamp-2 text-sm font-semibold text-black/75">{item.message || item.title || "Active alert"}</p>
+                <p className="mt-1 text-xs text-black/45">{item.district?.name || item.districtName || "Selected area"} · {formatNotificationTime(item.createdAt || item.triggeredAt)}</p>
+              </Link>
+            )) : (
+              <div className="px-4 py-6 text-center text-sm text-black/50">No active notifications.</div>
+            )}
+          </div>
+          <Link to="/alerts" className="block bg-[#F7FAF9] px-4 py-3 text-center text-sm font-bold text-emerald-700 hover:bg-emerald-50">
+            View all alerts
+          </Link>
+        </div>
+      )}
+    </div>
   );
+}
+
+function formatNotificationTime(value) {
+  if (!value) return "recently";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "recently";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }

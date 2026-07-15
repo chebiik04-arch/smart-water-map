@@ -35,7 +35,7 @@ export function OperationsPage() {
 
   const { data } = useQuery({
     queryKey: ["rainfall-page", districtId],
-    queryFn: () => endpoints.rainfallSeries(districtId, { months: 6 }).then((res) => res.data),
+    queryFn: () => endpoints.rainfallSeries(districtId, { calendarYear: true }).then((res) => res.data),
     enabled: Boolean(districtId)
   });
 
@@ -114,7 +114,7 @@ export function OperationsPage() {
             ) : <EmptyPanel message="No monthly rainfall returned by the backend." />}
           </ChartPanel>
 
-          <ChartPanel title="Trend (6 Months)">
+          <ChartPanel title="Trend (Year to Date)">
             {chartRows.length ? (
               <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={chartRows}>

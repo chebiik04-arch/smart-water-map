@@ -6,11 +6,11 @@ import { asArray } from "../../utils/apiData";
 export function RainfallChart({ districtId }) {
   const { data, isLoading } = useQuery({
     queryKey: ["rainfall", districtId],
-    queryFn: () => endpoints.rainfallSeries(districtId, { months: 6 }).then((res) => res.data),
+    queryFn: () => endpoints.rainfallSeries(districtId, { calendarYear: true }).then((res) => res.data),
     enabled: Boolean(districtId)
   });
   const rows = asArray(data);
-  return <ChartShell title="Rainfall Trend (Last 6 Months)" loading={isLoading}>
+  return <ChartShell title="Rainfall Trend (Year to Date)" loading={isLoading}>
     {rows.length ? <ResponsiveContainer width="100%" height={150}>
       <BarChart data={rows}>
         <CartesianGrid stroke="#E5E7EB" vertical={false} />

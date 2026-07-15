@@ -6,7 +6,7 @@ import { asArray } from "../../utils/apiData";
 export function NDVIChart({ districtId }) {
   const { data, isLoading } = useQuery({
     queryKey: ["ndvi", districtId],
-    queryFn: () => endpoints.ndviSeries(districtId, { months: 6 }).then((res) => res.data),
+    queryFn: () => endpoints.ndviSeries(districtId, { calendarYear: true }).then((res) => res.data),
     enabled: Boolean(districtId)
   });
   const rows = asArray(data);
