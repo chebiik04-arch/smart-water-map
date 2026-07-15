@@ -5,7 +5,7 @@ export const defaultPlatformSettings = {
   organizationName: "Smart Water",
   country: "Kenya",
   general: {
-    defaultDistrict: "",
+    defaultDistrict: "Makueni",
     temperatureUnit: "Celsius"
   },
   map: {

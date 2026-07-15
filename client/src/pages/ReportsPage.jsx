@@ -8,6 +8,7 @@ import { asArray } from "../utils/apiData";
 import { compressPhoto, getGpsPosition } from "../utils/photoEvidence";
 import { getQueuedReports, queueReport, syncQueuedReports } from "../utils/offlineReports";
 import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
+import { Pagination, usePagination } from "../components/Pagination";
 
 const initialForm = { districtId: "", latitude: "", longitude: "", waterLevel: "", description: "", photoUrl: "", gpsAccuracyMeters: "", photoMetadata: null };
 
@@ -43,6 +44,7 @@ export function ReportsPage() {
   const districts = districtFeatures.map((feature) => ({ id: feature.id, name: feature.properties?.name }));
   const reportMapDistrictId = matchDistrictForAoi(districtFeatures, selectedAoi);
   const visibleReports = reports.filter((report) => tab === "pending" ? report.status !== "VERIFIED" : report.status === "VERIFIED");
+  const reportsPagination = usePagination(visibleReports, 6);
   const stats = {
     total: reports.length,
     pending: reports.filter((report) => report.status !== "VERIFIED" && report.status !== "REJECTED").length,
@@ -137,9 +139,10 @@ export function ReportsPage() {
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
           <div className="border-b border-black/10 p-4"><h2 className="text-sm font-bold">Report List</h2></div>
           <div className="divide-y divide-black/10">
-            {visibleReports.map((report) => <ReportRow key={report.id} report={report} canVerify={canVerify} onVerify={verifyReport} onReject={rejectReport} />)}
+            {reportsPagination.pageRows.map((report) => <ReportRow key={report.id} report={report} canVerify={canVerify} onVerify={verifyReport} onReject={rejectReport} />)}
             {!visibleReports.length && <p className="p-6 text-center text-sm text-black/50">No reports returned by the backend for this view.</p>}
           </div>
+          <Pagination pagination={reportsPagination} />
         </section>
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
           <div className="border-b border-black/10 p-4"><h2 className="text-sm font-bold">Report Locations</h2></div>

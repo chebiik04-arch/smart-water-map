@@ -10,13 +10,7 @@ import { geoJsonPointToLatLng } from "../../utils/geoHelpers";
 import { asArray } from "../../utils/apiData";
 import { geometryCenter, geometryToFeatureCollection } from "../../utils/aoiGeometry";
 import { usePlatformSettings } from "../../hooks/usePlatformSettings";
-
-const basemaps = {
-  OpenStreetMap: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  Satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  Terrain: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-  "Dark Map": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-};
+import { basemapAttribution, basemapOptions, basemapSwatch, basemapUrl } from "../../utils/basemaps";
 
 const defaultCenter = [
   Number(import.meta.env.VITE_MAP_CENTER_LAT || -1.8),
@@ -70,7 +64,7 @@ export function DroughtMap({ districtId, aoiGeometry = null, aoiName = "", allLa
         className="z-0"
       >
         <ZoomControl position="topleft" />
-        <TileLayer attribution="&copy; OpenStreetMap contributors" url={basemaps[basemap]} />
+        <TileLayer attribution={basemapAttribution(basemap)} url={basemapUrl(basemap)} />
         <ScaleControl position="bottomleft" metric imperial={false} />
         {aoiGeometry && <FitToGeometry geometry={aoiGeometry} />}
         {visibleDistricts && <GeoJSON data={visibleDistricts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
@@ -144,7 +138,13 @@ function MapPanels({ basemap, setBasemap, layers, setLayers, expanded, heatOpaci
     <div className="absolute right-4 top-4 z-[500] flex max-h-[calc(100%-2rem)] w-52 max-w-[calc(100%-2rem)] flex-col gap-3 overflow-y-auto pr-1">
       <div className="w-full rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
         <PanelTitle title="Basemap" />
-        {Object.keys(basemaps).map((item) => <button key={item} onClick={() => setBasemap(item)} className="mt-2 flex w-full items-center gap-2 text-left text-xs"><span className="h-7 w-7 rounded bg-emerald-100" /><span className="flex-1">{item}</span><span className={`h-3 w-3 rounded-full border ${basemap === item ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} /></button>)}
+        {basemapOptions.map((item) => (
+          <button key={item.name} onClick={() => setBasemap(item.name)} className="mt-2 flex w-full items-center gap-2 rounded-md border border-black/10 p-2 text-left text-xs hover:bg-black/[0.03]">
+            <span className={`h-8 w-10 shrink-0 rounded bg-cover ${basemapSwatch(item.name)}`} />
+            <span className="flex-1 font-medium">{item.name}</span>
+            <span className={`h-3 w-3 rounded-full border ${basemap === item.name ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} />
+          </button>
+        ))}
       </div>
       {showLayerPanel && <div className="w-full rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
         <PanelTitle title="Layers" />

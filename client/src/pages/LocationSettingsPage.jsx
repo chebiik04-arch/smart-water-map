@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import { GeoJSON, MapContainer, TileLayer, useMap } from "react-leaflet";
-import { MapPinned, Plus, Upload } from "lucide-react";
+import { Layers, MapPinned, Plus, Upload } from "lucide-react";
 import { endpoints } from "../services/api";
 import { useAoiSelection } from "../hooks/useAoiSelection";
+import { basemapAttribution, basemapOptions, basemapSwatch, basemapUrl } from "../utils/basemaps";
 
 const boundaryStyle = {
   color: "#006B58",
@@ -19,6 +20,7 @@ export function LocationSettingsPage() {
   const [form, setForm] = useState({ name: "", files: [] });
   const [uploadFormKey, setUploadFormKey] = useState(0);
   const [message, setMessage] = useState("");
+  const [basemap, setBasemap] = useState("OpenStreetMap");
   const { aois, selectedAoiId, selectedAoi, selectedAoiSummary: selectedSummary, isLoading: aoisLoading, isFetching, updateSelectedAoi } = useAoiSelection();
 
   const createMutation = useMutation({
@@ -124,11 +126,11 @@ export function LocationSettingsPage() {
           </form>
         </aside>
 
-        <section className="min-h-[680px] overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
+        <section className="relative min-h-[680px] overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
           <MapContainer className="h-full min-h-[680px] w-full" center={[0.35, 37.9]} zoom={6} scrollWheelZoom>
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution={basemapAttribution(basemap)}
+              url={basemapUrl(basemap)}
             />
             {geometry && (
               <>
@@ -137,6 +139,16 @@ export function LocationSettingsPage() {
               </>
             )}
           </MapContainer>
+          <div className="absolute right-4 top-4 z-[500] w-52 max-w-[calc(100%-2rem)] rounded-lg border border-black/10 bg-white/95 p-3 shadow-sm">
+            <div className="flex items-center justify-between text-xs font-bold"><span>Basemap</span><Layers size={14} /></div>
+            {basemapOptions.map((item) => (
+              <button key={item.name} onClick={() => setBasemap(item.name)} className="mt-2 flex w-full items-center gap-2 rounded-md border border-black/10 p-2 text-left text-xs hover:bg-black/[0.03]">
+                <span className={`h-8 w-10 shrink-0 rounded bg-cover ${basemapSwatch(item.name)}`} />
+                <span className="flex-1 font-medium">{item.name}</span>
+                <span className={`h-3 w-3 rounded-full border ${basemap === item.name ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} />
+              </button>
+            ))}
+          </div>
         </section>
       </div>
     </section>

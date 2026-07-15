@@ -35,6 +35,7 @@ import { asArray } from "../utils/apiData";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
 import { geometryCenter, geometryToFeatureCollection } from "../utils/aoiGeometry";
+import { basemapAttribution, basemapOptions, basemapSwatch, basemapUrl } from "../utils/basemaps";
 
 const selectedDistrictStorageKey = "smart-water-map-selected-district";
 const selectedDistrictEventName = "smart-water-map:district-change";
@@ -208,11 +209,11 @@ export function DashboardPage() {
 
             <aside className="z-[500] space-y-3 border-t border-black/10 bg-white/95 p-4 xl:h-full xl:overflow-y-auto xl:border-l xl:border-t-0">
               <CollapsiblePanel title="Basemaps" collapsed={basemapsCollapsed} onToggle={() => setBasemapsCollapsed((value) => !value)}>
-                {["OpenStreetMap", "Satellite", "Terrain", "Dark Map"].map((item) => (
-                  <button key={item} onClick={() => setActiveBasemap(item)} className="mt-2 flex w-full items-center gap-3 rounded-md border border-black/10 p-2 text-left text-sm hover:bg-black/[0.03]">
-                    <span className={`h-9 w-11 shrink-0 rounded bg-cover ${basemapSwatch(item)}`} />
-                    <span className="flex-1 font-medium">{item}</span>
-                    <span className={`h-3.5 w-3.5 rounded-full border ${activeBasemap === item ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} />
+                {basemapOptions.map((item) => (
+                  <button key={item.name} onClick={() => setActiveBasemap(item.name)} className="mt-2 flex w-full items-center gap-3 rounded-md border border-black/10 p-2 text-left text-sm hover:bg-black/[0.03]">
+                    <span className={`h-9 w-11 shrink-0 rounded bg-cover ${basemapSwatch(item.name)}`} />
+                    <span className="flex-1 font-medium">{item.name}</span>
+                    <span className={`h-3.5 w-3.5 rounded-full border ${activeBasemap === item.name ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} />
                   </button>
                 ))}
               </CollapsiblePanel>
@@ -422,21 +423,15 @@ function FeedPanel({ title, action, actionTo, items, headerClass = "", }) {
 }
 
 function ForecastCard({ forecast }) {
-  const pct = Math.round((forecast?.riskScore || 0) * 100);
+  const pct = clampPercent(Math.round((forecast?.riskScore || 0) * 100));
   const riskLabel = forecast?.riskLabel || (pct >= 76 ? "Emergency" : pct >= 51 ? "High Risk" : pct >= 31 ? "Watch" : "Normal");
   const drivers = asArray(forecast?.drivers);
   const recommendations = asArray(forecast?.recommendation);
   return (
     <section className="rounded-lg border border-black/10 bg-white p-4 shadow-sm">
       <h2 className="text-sm font-bold">AI Drought Forecast <span className="text-xs font-medium">(Next 30 Days)</span></h2>
-      <div className="mt-4 grid grid-cols-[9rem_1fr] gap-5">
-        <div className="relative h-36">
-          <div className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(#EF4444 0 ${pct}%, #E5E7EB ${pct}% 100%)` }} />
-          <div className="absolute inset-[20px] grid place-items-center rounded-full bg-white text-center">
-            <p className="text-4xl font-bold">{pct}%</p>
-            <p className="text-xs font-bold text-red-500">{riskLabel}</p>
-          </div>
-        </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-[10rem_1fr] xl:grid-cols-1 2xl:grid-cols-[10rem_1fr]">
+        <DroughtGauge value={pct} label={riskLabel} />
         <div className="text-xs">
           <p className="font-bold">Drivers</p>
           {drivers.length ? drivers.map((driver) => <Driver key={driver.factor} icon={driver.direction === "UP" ? ArrowUp : ArrowDown} text={driver.factor} />) : <p className="mt-1 text-black/50">No drivers returned.</p>}
@@ -445,6 +440,42 @@ function ForecastCard({ forecast }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function DroughtGauge({ value, label }) {
+  const angle = -90 + (clampPercent(value) / 100) * 180;
+  const needleLength = 54;
+  const needleX = 80 + needleLength * Math.cos((angle * Math.PI) / 180);
+  const needleY = 88 + needleLength * Math.sin((angle * Math.PI) / 180);
+  const arc = describeArc(80, 88, 62, -90, angle);
+
+  return (
+    <div className="mx-auto w-40 text-center sm:mx-0 xl:mx-auto 2xl:mx-0">
+      <svg viewBox="0 0 160 120" className="h-32 w-40" role="img" aria-label={`Drought forecast gauge at ${value}%`}>
+        <defs>
+          <linearGradient id="dashboard-drought-gauge" x1="18" y1="88" x2="142" y2="88" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#FBBF24" />
+            <stop offset="55%" stopColor="#F97316" />
+            <stop offset="100%" stopColor="#DC2626" />
+          </linearGradient>
+        </defs>
+        <path d={describeArc(80, 88, 62, -90, 90)} fill="none" stroke="#E7EAE5" strokeWidth="14" strokeLinecap="round" />
+        <path d={arc} fill="none" stroke="url(#dashboard-drought-gauge)" strokeWidth="14" strokeLinecap="round" />
+        {[0, 25, 50, 75, 100].map((tick) => {
+          const tickAngle = -90 + (tick / 100) * 180;
+          const outer = pointOnArc(80, 88, 70, tickAngle);
+          const inner = pointOnArc(80, 88, 61, tickAngle);
+          return <line key={tick} x1={outer.x} y1={outer.y} x2={inner.x} y2={inner.y} stroke="#17201d" strokeOpacity="0.32" strokeWidth="2" />;
+        })}
+        <line x1="80" y1="88" x2={needleX} y2={needleY} stroke="#17201d" strokeWidth="4" strokeLinecap="round" />
+        <circle cx="80" cy="88" r="7" fill="#17201d" />
+        <text x="22" y="110" className="fill-black/45 text-[10px] font-bold">0</text>
+        <text x="130" y="110" className="fill-black/45 text-[10px] font-bold">100</text>
+      </svg>
+      <p className="text-3xl font-bold leading-none">{value}%</p>
+      <p className="mt-1 text-xs font-bold text-red-500">{label}</p>
+    </div>
   );
 }
 
@@ -481,6 +512,25 @@ function CollapsiblePanel({ title, collapsed, onToggle, children }) {
 
 function Driver({ icon: Icon, text }) {
   return <p className="mt-1 flex items-center gap-1 text-black/65"><Icon size={12} className="text-red-500" /> {text}</p>;
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+}
+
+function describeArc(cx, cy, radius, startAngle, endAngle) {
+  const start = pointOnArc(cx, cy, radius, startAngle);
+  const end = pointOnArc(cx, cy, radius, endAngle);
+  const largeArcFlag = Math.abs(endAngle - startAngle) <= 180 ? "0" : "1";
+  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
+}
+
+function pointOnArc(cx, cy, radius, angle) {
+  const radians = (angle * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians)
+  };
 }
 
 function buildMapPoints({ sensors, reports, waterSources }) {
@@ -526,29 +576,6 @@ function pointRadius(type) {
 
 function toggleLayer(setLayers, key) {
   setLayers((current) => ({ ...current, [key]: !current[key] }));
-}
-
-function basemapSwatch(item) {
-  return {
-    OpenStreetMap: "bg-[linear-gradient(135deg,#e8efe1_0_35%,#f7f1df_35%_55%,#b8d7ef_55%_100%)]",
-    Satellite: "bg-[radial-gradient(circle_at_30%_30%,#789168,#263e28_46%,#102417)]",
-    Terrain: "bg-[linear-gradient(135deg,#e4d9bd,#8ba06f_45%,#6f5f42)]",
-    "Dark Map": "bg-[linear-gradient(135deg,#0f172a,#1f2937_50%,#111827)]"
-  }[item];
-}
-
-function basemapUrl(item) {
-  if (item === "Satellite") return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-  if (item === "Terrain") return "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
-  if (item === "Dark Map") return "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-  return import.meta.env.VITE_MAP_TILE_URL || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-}
-
-function basemapAttribution(item) {
-  if (item === "Satellite") return "Tiles &copy; Esri";
-  if (item === "Terrain") return "Map data &copy; OpenTopoMap contributors";
-  if (item === "Dark Map") return "&copy; OpenStreetMap contributors &copy; CARTO";
-  return "&copy; OpenStreetMap contributors";
 }
 
 function featureCenter(feature) {

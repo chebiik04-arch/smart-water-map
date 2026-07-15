@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Bell, CheckCircle2, Filter, Info, Smartphone } from "lucide-react";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
+import { Pagination, usePagination } from "../components/Pagination";
 
 const filters = ["All", "High", "Medium", "Low"];
 
@@ -19,6 +20,7 @@ export function AlertsPage() {
   const districtName = districts?.features?.[0]?.properties?.name || "Selected area";
   const counts = countByPriority(rows);
   const visibleRows = activeFilter === "All" ? rows : rows.filter((alert) => alert.priority === activeFilter);
+  const alertsPagination = usePagination(visibleRows, 6);
 
   return (
     <section className="space-y-5 bg-[#EFF4F0] p-4 text-[#17201d] lg:p-5">
@@ -65,13 +67,18 @@ export function AlertsPage() {
       </div>
 
       <div className="space-y-3">
-        {visibleRows.map((alert) => <AlertCard key={alert.id} alert={alert} />)}
+        {alertsPagination.pageRows.map((alert) => <AlertCard key={alert.id} alert={alert} />)}
         {!visibleRows.length && (
           <div className="rounded-xl border border-black/10 bg-white p-8 text-center text-sm text-black/50 shadow-sm">
             No active alerts returned by the backend.
           </div>
         )}
       </div>
+      {alertsPagination.total > alertsPagination.pageSize && (
+        <div className="overflow-hidden rounded-xl border border-black/10 shadow-sm">
+          <Pagination pagination={alertsPagination} />
+        </div>
+      )}
     </section>
   );
 }

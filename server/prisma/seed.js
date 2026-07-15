@@ -76,7 +76,15 @@ async function main() {
   await seedCountyAois();
 
   const tenant = await prisma.tenant.create({
-    data: { name: "Kenya Drought Response Pilot", slug: "kenya-pilot", country: "Kenya" }
+    data: {
+      name: "Kenya Drought Response Pilot",
+      slug: "kenya-pilot",
+      country: "Kenya",
+      config: {
+        general: { defaultDistrict: "Makueni", temperatureUnit: "Celsius" },
+        map: { defaultZoom: 9, defaultBasemap: "OpenStreetMap", centerLat: -2.2, centerLng: 37.35 }
+      }
+    }
   });
   const adminPassword = await bcrypt.hash("AdminPass123", 12);
   const admin = await prisma.user.create({
@@ -86,7 +94,7 @@ async function main() {
       email: "admin@smartwater.local",
       passwordHash: adminPassword,
       role: "admin",
-      district: "Turkana Central",
+      district: "Makueni",
       points: 120
     }
   });

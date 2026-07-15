@@ -4,6 +4,7 @@ import { endpoints } from "../services/api";
 
 export const selectedAoiStorageKey = "smart-water-map-selected-aoi";
 export const selectedAoiEventName = "smart-water-map:aoi-change";
+export const defaultAoiName = "Makueni";
 
 export function useAoiSelection() {
   const [selectedAoiId, setSelectedAoiId] = useState(() => localStorage.getItem(selectedAoiStorageKey) || "");
@@ -15,7 +16,8 @@ export function useAoiSelection() {
 
   useEffect(() => {
     if (!selectedAoiId && aois.length) {
-      updateSelectedAoi(aois[0].id);
+      const defaultAoi = aois.find((aoi) => String(aoi.name || "").toLowerCase() === defaultAoiName.toLowerCase()) || aois[0];
+      updateSelectedAoi(defaultAoi.id);
     }
   }, [aois, selectedAoiId]);
 

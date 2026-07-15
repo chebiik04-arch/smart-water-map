@@ -9,6 +9,7 @@ import { asArray } from "../utils/apiData";
 import { SeverityBadge } from "./SeverityBadge";
 import { WaterTableTerrain } from "./WaterTableTerrain";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
+import { basemapAttribution, basemapOptions, basemapSwatch, basemapUrl } from "../utils/basemaps";
 
 const { Overlay } = LayersControl;
 
@@ -59,7 +60,12 @@ export function DroughtMap() {
   const [livestockStress, setLivestockStress] = useState({ waterPoints: [], pasture: [] });
   const [liveUpdates, setLiveUpdates] = useState([]);
   const [weekIndex, setWeekIndex] = useState(0);
+  const [basemap, setBasemap] = useState("OpenStreetMap");
   const { data: settings } = usePlatformSettings();
+
+  useEffect(() => {
+    if (settings?.map?.defaultBasemap) setBasemap(settings.map.defaultBasemap);
+  }, [settings?.map?.defaultBasemap]);
 
   useEffect(() => {
     Promise.all([
@@ -128,10 +134,10 @@ export function DroughtMap() {
         className="z-0"
       >
         <ZoomControl position="topleft" />
-        <LayersControl position="topright">
+        <LayersControl position="bottomright">
           <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url={import.meta.env.VITE_MAP_TILE_URL || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"}
+            attribution={basemapAttribution(basemap)}
+            url={basemapUrl(basemap)}
           />
 
           {districts && (
@@ -275,6 +281,17 @@ export function DroughtMap() {
         </LayersControl>
       </MapContainer>
 
+      <div className="absolute right-4 top-4 z-[500] w-52 max-w-[calc(100%-2rem)] rounded-lg border border-black/10 bg-white/95 p-3 shadow-panel backdrop-blur">
+        <div className="flex items-center justify-between text-xs font-bold"><span>Basemap</span><Layers size={14} /></div>
+        {basemapOptions.map((item) => (
+          <button key={item.name} onClick={() => setBasemap(item.name)} className="mt-2 flex w-full items-center gap-2 rounded-md border border-black/10 p-2 text-left text-xs hover:bg-black/[0.03]">
+            <span className={`h-8 w-10 shrink-0 rounded bg-cover ${basemapSwatch(item.name)}`} />
+            <span className="flex-1 font-medium">{item.name}</span>
+            <span className={`h-3 w-3 rounded-full border ${basemap === item.name ? "border-emerald-700 bg-emerald-600" : "border-black/25"}`} />
+          </button>
+        ))}
+      </div>
+
       <div className="absolute left-4 top-20 z-[500] max-w-sm rounded-lg border border-black/10 bg-white/95 p-4 shadow-panel backdrop-blur">
         <div className="mb-1 flex items-center gap-2 text-primary"><Layers size={18} /><h1 className="font-semibold">{settings?.general?.defaultDistrict || "Drought GIS"}</h1></div>
         <p className="mb-3 text-xs font-medium text-black/60">{settings?.organizationName || "Smart Water"} · Zoom {settings?.map?.defaultZoom || 9}</p>
@@ -321,7 +338,7 @@ export function DroughtMap() {
         </div>
       </div>
 
-      <div className="absolute right-4 top-20 z-[500] w-80 max-w-[calc(100vw-2rem)]">
+      <div className="absolute right-4 top-[17rem] z-[500] w-80 max-w-[calc(100vw-2rem)]">
         <WaterTableTerrain snapshot={terrainSnapshot} />
       </div>
     </div>

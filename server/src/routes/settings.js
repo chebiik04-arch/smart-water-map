@@ -62,6 +62,10 @@ async function resolveTenant(tenantId) {
 async function formatSettings(tenant) {
   const config = tenant.config || {};
   const fallbackDistrict = await prisma.district.findFirst({
+    where: { tenantId: tenant.id, name: "Makueni" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true }
+  }) || await prisma.district.findFirst({
     where: { tenantId: tenant.id },
     orderBy: { createdAt: "asc" },
     select: { id: true, name: true }
@@ -92,7 +96,7 @@ function defaultSettings() {
     country: "Kenya",
     slug: "",
     general: {
-      defaultDistrict: "",
+      defaultDistrict: "Makueni",
       temperatureUnit: "Celsius"
     },
     map: {
