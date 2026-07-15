@@ -13,6 +13,7 @@ import {
   YAxis
 } from "recharts";
 import { DroughtMap } from "../components/map/DroughtMap";
+import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
 
@@ -46,6 +47,7 @@ export function OperationsPage() {
   const normalTotal = normalMonthlyRainfallMm * Math.max(rainfall.length, 1);
   const deficitPercent = normalTotal ? ((total - normalTotal) / normalTotal) * 100 : 0;
   const zoneRows = useMemo(() => buildZoneRows(districtFeatures, rainfall, avg), [districtFeatures, rainfall, avg]);
+  const zonePagination = usePagination(zoneRows, 8);
   const highestZone = zoneRows.reduce((max, row) => row.last30Days > (max?.last30Days ?? -Infinity) ? row : max, null);
   const lowestZone = zoneRows.reduce((min, row) => row.last30Days < (min?.last30Days ?? Infinity) ? row : min, null);
   const chartRows = rainfall.map((row) => ({
@@ -144,7 +146,7 @@ export function OperationsPage() {
               </tr>
             </thead>
             <tbody>
-              {zoneRows.map((row) => <ZoneRow key={row.zone} row={row} />)}
+              {zonePagination.pageRows.map((row) => <ZoneRow key={row.zone} row={row} />)}
               {!zoneRows.length && (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-black/50">No rainfall zones available.</td>
@@ -153,6 +155,7 @@ export function OperationsPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pagination={zonePagination} />
       </section>
     </section>
   );

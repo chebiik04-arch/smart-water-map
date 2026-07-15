@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, Droplets, Sprout, TrendingUp, Waves } from "lucide-react";
+import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 
 export function AdvisoryPage() {
@@ -10,6 +11,7 @@ export function AdvisoryPage() {
   const [recommendations, setRecommendations] = useState([]);
   const [market, setMarket] = useState({ stored: [], external: [] });
   const [livestock, setLivestock] = useState({ waterPoints: [], pasture: [] });
+  const marketPagination = usePagination(market.stored, 8);
 
   useEffect(() => {
     Promise.all([
@@ -90,8 +92,9 @@ export function AdvisoryPage() {
         <Panel title="Market price integration">
           <table className="w-full text-left text-sm">
             <thead className="bg-background"><tr><th className="p-3">Commodity</th><th>Market</th><th>Price</th><th>Decision hint</th></tr></thead>
-            <tbody>{market.stored.map((item) => <tr key={item.id} className="border-t border-black/10"><td className="p-3">{item.commodity}</td><td>{item.marketName}</td><td>{item.currency} {item.price}/{item.unit}</td><td className="max-w-sm pr-3">{item.decisionHint}</td></tr>)}</tbody>
+            <tbody>{marketPagination.pageRows.map((item) => <tr key={item.id} className="border-t border-black/10"><td className="p-3">{item.commodity}</td><td>{item.marketName}</td><td>{item.currency} {item.price}/{item.unit}</td><td className="max-w-sm pr-3">{item.decisionHint}</td></tr>)}</tbody>
           </table>
+          <Pagination pagination={marketPagination} />
         </Panel>
 
         <Panel title="Livestock water stress">

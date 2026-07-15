@@ -12,6 +12,7 @@ import {
   YAxis
 } from "recharts";
 import { DroughtMap } from "../components/map/DroughtMap";
+import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
 
@@ -40,6 +41,7 @@ export function ForecastsPage() {
   const ndvi = asArray(data);
   const avg = ndvi.length ? ndvi.reduce((sum, row) => sum + Number(row.value || 0), 0) / ndvi.length : 0;
   const zoneRows = useMemo(() => buildVegetationZones(districtFeatures, ndvi, avg), [districtFeatures, ndvi, avg]);
+  const zonePagination = usePagination(zoneRows, 8);
   const healthyZones = zoneRows.filter((row) => row.ndvi >= 0.6).length;
   const criticalZones = zoneRows.filter((row) => row.ndvi < 0.2).length;
   const stressedArea = zoneRows.filter((row) => row.ndvi < 0.4).reduce((sum, row) => sum + row.coverageArea, 0);
@@ -135,11 +137,12 @@ export function ForecastsPage() {
               </tr>
             </thead>
             <tbody>
-              {zoneRows.map((row) => <ZoneRow key={row.zone} row={row} />)}
+              {zonePagination.pageRows.map((row) => <ZoneRow key={row.zone} row={row} />)}
               {!zoneRows.length && <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-black/50">No vegetation zones available.</td></tr>}
             </tbody>
           </table>
         </div>
+        <Pagination pagination={zonePagination} />
       </section>
     </section>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
+import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
 
@@ -10,6 +11,7 @@ export function AdminUsersPage() {
   const [showForm, setShowForm] = useState(false);
   const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "field_agent", district: "" });
   const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId);
+  const usersPagination = usePagination(users, 8);
 
   useEffect(() => { refreshTenants(); }, []);
   useEffect(() => { if (selectedTenantId) refreshUsers(selectedTenantId); }, [selectedTenantId]);
@@ -75,10 +77,11 @@ export function AdminUsersPage() {
         <table className="w-full text-left text-sm">
           <thead className="bg-background"><tr><th className="p-3">Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
           <tbody>
-            {users.map((user) => <tr key={user.id} className="border-t border-black/10"><td className="p-3 font-medium">{user.name}</td><td>{user.email}</td><td className="capitalize">{user.role?.replace("_", " ")}</td><td><StatusBadge status={user.status || "ACTIVE"} /></td><td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : "-"}</td><td>{user.status !== "INACTIVE" && <button onClick={() => deactivateUser(user.id)} className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">Deactivate</button>}</td></tr>)}
+            {usersPagination.pageRows.map((user) => <tr key={user.id} className="border-t border-black/10"><td className="p-3 font-medium">{user.name}</td><td>{user.email}</td><td className="capitalize">{user.role?.replace("_", " ")}</td><td><StatusBadge status={user.status || "ACTIVE"} /></td><td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : "-"}</td><td>{user.status !== "INACTIVE" && <button onClick={() => deactivateUser(user.id)} className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">Deactivate</button>}</td></tr>)}
             {!users.length && <tr><td colSpan={6} className="p-6 text-center text-sm text-black/50">No users returned by the backend.</td></tr>}
           </tbody>
         </table>
+        <Pagination pagination={usersPagination} />
       </section>
 
       {showForm && (

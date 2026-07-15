@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Droplet, Pencil, Plus, Search, X } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { asArray, featuresToProperties } from "../utils/apiData";
@@ -269,6 +270,7 @@ export function WaterSources() {
 }
 
 function SourceTable({ title, rows, loading, selected, onSelect, onEdit, action }) {
+  const pagination = usePagination(rows, 8);
   return (
     <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-black/10 p-4">
@@ -285,40 +287,45 @@ function SourceTable({ title, rows, loading, selected, onSelect, onEdit, action 
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="bg-[#F7FBF9] text-xs uppercase text-black/50"><tr><th className="p-3">ID</th><th>Name</th><th>Type</th><th>Location</th><th>Depth</th><th>Water Level</th><th>Yield</th><th>Inspection Notes</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
-            {rows.map((source) => <SourceRow key={source.id || source.name} source={source} selected={selected?.id === source.id} onClick={() => onSelect(source)} onEdit={onEdit} />)}
+            {pagination.pageRows.map((source) => <SourceRow key={source.id || source.name} source={source} selected={selected?.id === source.id} onClick={() => onSelect(source)} onEdit={onEdit} />)}
             {!rows.length && <EmptyRow colSpan={10} message={loading ? "Loading water sources..." : "No water sources returned by the backend."} />}
           </tbody>
         </table>
       </div>
+      <Pagination pagination={pagination} />
     </section>
   );
 }
 
 function WaterPointTable({ rows, loading, selected, onSelect, onEdit }) {
+  const pagination = usePagination(rows, 8);
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] text-left text-sm">
-        <thead className="bg-[#F7FBF9] text-xs uppercase text-black/50"><tr><th className="p-3">ID</th><th>Name</th><th>Type</th><th>Location</th><th>Capacity</th><th>Water Level</th><th>Inspection Notes</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>
-          {rows.map((source) => (
-            <tr key={source.id || source.name} onClick={() => onSelect(source)} className={`cursor-pointer border-t border-black/10 hover:bg-emerald-50/60 ${selected?.id === source.id ? "bg-emerald-50" : ""}`}>
-              <td className="p-3 text-xs text-black/55">{shortId(source.id)}</td>
-              <td className="font-semibold">{source.name}</td>
-              <td>{typeLabels[source.type] || source.type}</td>
-              <td>{source.districtName || "-"}</td>
-              <td>{source.yield ? `${source.yield.toLocaleString()} L/hr` : "-"}</td>
-              <td><WaterLevel value={source.latestLevel} /></td>
-              <td className="max-w-56 truncate text-black/60">{source.inspectionNotes || "-"}</td>
-              <td><StatusBadge status={source.status} /></td>
-              <td>
-                {onEdit && <button type="button" onClick={(event) => { event.stopPropagation(); onEdit(source); }} className="inline-flex items-center gap-1 rounded-md border border-black/10 px-2 py-1 text-xs font-semibold hover:bg-black/5"><Pencil size={12} /> Edit</button>}
-              </td>
-            </tr>
-          ))}
-          {!rows.length && <EmptyRow colSpan={9} message={loading ? "Loading water points..." : "No water points returned by the backend."} />}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <thead className="bg-[#F7FBF9] text-xs uppercase text-black/50"><tr><th className="p-3">ID</th><th>Name</th><th>Type</th><th>Location</th><th>Capacity</th><th>Water Level</th><th>Inspection Notes</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            {pagination.pageRows.map((source) => (
+              <tr key={source.id || source.name} onClick={() => onSelect(source)} className={`cursor-pointer border-t border-black/10 hover:bg-emerald-50/60 ${selected?.id === source.id ? "bg-emerald-50" : ""}`}>
+                <td className="p-3 text-xs text-black/55">{shortId(source.id)}</td>
+                <td className="font-semibold">{source.name}</td>
+                <td>{typeLabels[source.type] || source.type}</td>
+                <td>{source.districtName || "-"}</td>
+                <td>{source.yield ? `${source.yield.toLocaleString()} L/hr` : "-"}</td>
+                <td><WaterLevel value={source.latestLevel} /></td>
+                <td className="max-w-56 truncate text-black/60">{source.inspectionNotes || "-"}</td>
+                <td><StatusBadge status={source.status} /></td>
+                <td>
+                  {onEdit && <button type="button" onClick={(event) => { event.stopPropagation(); onEdit(source); }} className="inline-flex items-center gap-1 rounded-md border border-black/10 px-2 py-1 text-xs font-semibold hover:bg-black/5"><Pencil size={12} /> Edit</button>}
+                </td>
+              </tr>
+            ))}
+            {!rows.length && <EmptyRow colSpan={9} message={loading ? "Loading water points..." : "No water points returned by the backend."} />}
+          </tbody>
+        </table>
+      </div>
+      <Pagination pagination={pagination} />
+    </>
   );
 }
 

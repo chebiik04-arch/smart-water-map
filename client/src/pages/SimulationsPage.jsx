@@ -12,6 +12,7 @@ import {
   YAxis
 } from "recharts";
 import { DroughtMap } from "../components/map/DroughtMap";
+import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
 
@@ -42,6 +43,7 @@ export function SimulationsPage() {
   const confidence = forecast?.confidenceScore ? Math.round(forecast.confidenceScore * 100) : 87;
   const riskLabel = riskText(riskPercent);
   const zoneRows = useMemo(() => buildRiskRows(districtFeatures, riskPercent), [districtFeatures, riskPercent]);
+  const zonePagination = usePagination(zoneRows, 8);
   const weeklyTrend = [1, 2, 3, 4].map((week) => ({ week: `Wk ${week}`, risk: Math.min(98, Math.max(12, riskPercent - 9 + week * 4)) }));
   const recommendations = buildRecommendations(forecast?.recommendation, riskPercent, rainfallDropPercent);
 
@@ -151,11 +153,12 @@ export function SimulationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {zoneRows.map((row) => <RiskRow key={row.zone} row={row} />)}
+                {zonePagination.pageRows.map((row) => <RiskRow key={row.zone} row={row} />)}
                 {!zoneRows.length && <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-black/50">No risk zones available.</td></tr>}
               </tbody>
             </table>
           </div>
+          <Pagination pagination={zonePagination} />
         </section>
       </div>
     </section>
@@ -163,9 +166,15 @@ export function SimulationsPage() {
 }
 
 function Gauge({ percent, label }) {
+  const arcEnd = 25 + percent / 2;
   return (
     <div className="mx-auto mt-6 h-32 w-56 overflow-hidden">
-      <div className="relative h-56 w-56 rounded-full" style={{ background: `conic-gradient(from 270deg, #E5E7EB 0 25%, #EF4444 25% ${25 + percent / 2}%, #E5E7EB ${25 + percent / 2}% 75%, transparent 75% 100%)` }}>
+      <div
+        className="relative h-56 w-56 rounded-full"
+        style={{
+          background: `conic-gradient(from 270deg, #E5E7EB 0 25%, #F97316 25%, #EF4444 ${Math.max(25, arcEnd - 12)}%, #7F1D1D ${arcEnd}%, #E5E7EB ${arcEnd}% 75%, transparent 75% 100%)`
+        }}
+      >
         <div className="absolute inset-8 rounded-full bg-white" />
         <div className="absolute inset-x-0 top-[5.2rem] text-center">
           <p className="text-4xl font-extrabold leading-none text-red-600">{percent}%</p>

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
+import { Pagination, usePagination } from "../components/Pagination";
 import { endpoints } from "../services/api";
 import { asArray } from "../utils/apiData";
 
@@ -19,6 +20,30 @@ export function DeveloperPortalPage() {
   const topWaterSources = asArray(report?.topWaterSources);
   const activeAlerts = asArray(report?.activeAlerts);
   const rainfall = asArray(report?.rainfall);
+  const reportRows = useMemo(() => [
+    ...topWaterSources.map((source) => ({
+      key: `source-${source.id}`,
+      category: source.type,
+      details: source.name,
+      status: source.status,
+      updated: source.lastInspected ? new Date(source.lastInspected).toLocaleDateString() : "-"
+    })),
+    ...activeAlerts.map((alert) => ({
+      key: `alert-${alert.id}`,
+      category: "Alert",
+      details: alert.message,
+      status: alert.severity,
+      updated: alert.triggeredAt ? new Date(alert.triggeredAt).toLocaleDateString() : "-"
+    })),
+    ...rainfall.map((row) => ({
+      key: `rainfall-${row.id || row.month}`,
+      category: "Rainfall",
+      details: row.month,
+      status: `${row.mmTotal} mm`,
+      updated: "-"
+    }))
+  ], [topWaterSources, activeAlerts, rainfall]);
+  const reportPagination = usePagination(reportRows, 8);
   const chartData = useMemo(() => [
     { name: "Water Sources", value: summary.waterSources?.total || 0 },
     { name: "Active", value: summary.waterSources?.active || 0 },
@@ -76,12 +101,11 @@ export function DeveloperPortalPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-background"><tr><th className="p-3">Category</th><th>Details</th><th>Status</th><th>Updated</th></tr></thead>
             <tbody>
-              {topWaterSources.map((source) => <tr key={source.id} className="border-t border-black/10"><td className="p-3 font-medium">{source.type}</td><td>{source.name}</td><td>{source.status}</td><td>{source.lastInspected ? new Date(source.lastInspected).toLocaleDateString() : "-"}</td></tr>)}
-              {activeAlerts.map((alert) => <tr key={alert.id} className="border-t border-black/10"><td className="p-3 font-medium">Alert</td><td>{alert.message}</td><td>{alert.severity}</td><td>{alert.triggeredAt ? new Date(alert.triggeredAt).toLocaleDateString() : "-"}</td></tr>)}
-              {rainfall.map((row) => <tr key={row.id || row.month} className="border-t border-black/10"><td className="p-3 font-medium">Rainfall</td><td>{row.month}</td><td>{row.mmTotal} mm</td><td>-</td></tr>)}
-              {!topWaterSources.length && !activeAlerts.length && !rainfall.length && <tr><td colSpan={4} className="p-6 text-center text-sm text-black/50">No report rows returned by the backend.</td></tr>}
+              {reportPagination.pageRows.map((row) => <tr key={row.key} className="border-t border-black/10"><td className="p-3 font-medium">{row.category}</td><td>{row.details}</td><td>{row.status}</td><td>{row.updated}</td></tr>)}
+              {!reportRows.length && <tr><td colSpan={4} className="p-6 text-center text-sm text-black/50">No report rows returned by the backend.</td></tr>}
             </tbody>
           </table>
+          <Pagination pagination={reportPagination} />
         </section>
       </div>
     </section>

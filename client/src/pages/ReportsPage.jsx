@@ -129,7 +129,7 @@ export function ReportsPage() {
         <Metric title="Rejected" value={stats.rejected} tone="text-red-600" />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_25rem]">
+      <div className="grid gap-4 xl:grid-cols-2">
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white shadow-sm">
           <div className="border-b border-black/10 p-4"><h2 className="text-sm font-bold">Report List</h2></div>
           <div className="divide-y divide-black/10">

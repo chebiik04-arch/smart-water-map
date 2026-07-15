@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DroughtMap } from "../components/map/DroughtMap";
+import { Pagination, usePagination } from "../components/Pagination";
 import { TimeSeriesChart } from "../components/TimeSeriesChart";
 import { endpoints } from "../services/api";
 import { asArray, featuresToProperties } from "../utils/apiData";
@@ -36,6 +37,7 @@ export function WaterMap() {
     enabled: Boolean(selectedDistrictId)
   });
   const rows = useMemo(() => featuresToProperties(sources), [sources]);
+  const waterPointsPagination = usePagination(rows, 6);
   const selectedDistrict = districtFeatures.find((feature) => feature.id === selectedDistrictId);
   const selectedDistrictName = selectedDistrict?.properties?.name || "Selected region";
 
@@ -70,7 +72,7 @@ export function WaterMap() {
         <table className="w-full text-left text-sm">
           <thead className="bg-background"><tr><th className="p-3">Name</th><th>Type</th><th>Sub-county</th><th>Status</th><th>Water Level</th><th>Last Updated</th></tr></thead>
           <tbody>
-            {rows.slice(0, 6).map((source) => (
+            {waterPointsPagination.pageRows.map((source) => (
               <tr key={source.id || source.name} className="border-t border-black/10">
                 <td className="p-3 font-medium">{source.name}</td>
                 <td>{source.type}</td>
@@ -83,6 +85,7 @@ export function WaterMap() {
             {!rows.length && <EmptyRow colSpan={6} message="No water points returned by the backend." />}
           </tbody>
         </table>
+        <Pagination pagination={waterPointsPagination} />
       </div>
       {selectedSource && (
         <aside className="fixed right-0 top-0 z-[700] h-full w-96 max-w-full border-l border-black/10 bg-white p-4 shadow-panel">
