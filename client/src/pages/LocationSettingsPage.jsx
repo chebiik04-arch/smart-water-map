@@ -16,7 +16,7 @@ const boundaryStyle = {
 
 export function LocationSettingsPage() {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ name: "", shp: null, dbf: null, shx: null, prj: null });
+  const [form, setForm] = useState({ name: "", files: [] });
   const [uploadFormKey, setUploadFormKey] = useState(0);
   const [message, setMessage] = useState("");
   const { aois, selectedAoiId, selectedAoi, selectedAoiSummary: selectedSummary, isLoading: aoisLoading, isFetching, updateSelectedAoi } = useAoiSelection();
@@ -25,7 +25,7 @@ export function LocationSettingsPage() {
     mutationFn: (payload) => endpoints.createAoi(payload).then((res) => res.data),
     onSuccess: async (aoi) => {
       setMessage("AOI saved.");
-      setForm({ name: "", shp: null, dbf: null, shx: null, prj: null });
+      setForm({ name: "", files: [] });
       setUploadFormKey((current) => current + 1);
       await queryClient.invalidateQueries({ queryKey: ["aois"] });
       updateSelectedAoi(aoi.id);
@@ -38,8 +38,8 @@ export function LocationSettingsPage() {
 
   const geometry = useMemo(() => selectedAoi?.geometry || null, [selectedAoi]);
 
-  function updateFile(field, fileList) {
-    setForm((current) => ({ ...current, [field]: fileList?.[0] || null }));
+  function updateFiles(fileList) {
+    setForm((current) => ({ ...current, files: Array.from(fileList || []) }));
   }
 
   function submitAoi(event) {
@@ -47,11 +47,12 @@ export function LocationSettingsPage() {
     setMessage("");
     const payload = new FormData();
     payload.append("name", form.name);
-    for (const field of ["shp", "dbf", "shx", "prj"]) {
-      if (form[field]) payload.append(field, form[field]);
-    }
+    form.files.forEach((file) => payload.append("files", file));
     createMutation.mutate(payload);
   }
+
+  const selectedFileExtensions = new Set(form.files.map((file) => file.name.toLowerCase().match(/\.[^.]+$/)?.[0]).filter(Boolean));
+  const missingRequiredFiles = [".shp", ".dbf", ".shx", ".prj"].filter((extension) => !selectedFileExtensions.has(extension));
 
   return (
     <section className="min-h-[calc(100vh-3.5rem)] bg-[#F5F6F4] p-4 lg:p-5">
@@ -103,10 +104,14 @@ export function LocationSettingsPage() {
               />
             </label>
             <div className="mt-4 grid gap-3">
-              <FileInput label=".shp file" accept=".shp" required onChange={(files) => updateFile("shp", files)} />
-              <FileInput label=".dbf file" accept=".dbf" onChange={(files) => updateFile("dbf", files)} />
-              <FileInput label=".shx file" accept=".shx" onChange={(files) => updateFile("shx", files)} />
-              <FileInput label=".prj file" accept=".prj" onChange={(files) => updateFile("prj", files)} />
+              <FileInput onChange={updateFiles} />
+              {form.files.length > 0 && (
+                <div className="rounded-md bg-black/[0.03] px-3 py-2 text-xs text-black/65">
+                  <p className="font-semibold text-black/75">Selected files</p>
+                  <p className="mt-1 break-words">{form.files.map((file) => file.name).join(", ")}</p>
+                  {missingRequiredFiles.length > 0 && <p className="mt-2 font-semibold text-red-700">Missing: {missingRequiredFiles.join(", ")}</p>}
+                </div>
+              )}
             </div>
             {message && <p className={`mt-3 text-sm ${message.includes("failed") || message.includes("exists") || message.includes("required") ? "text-red-700" : "text-emerald-700"}`}>{message}</p>}
             <button
@@ -138,17 +143,19 @@ export function LocationSettingsPage() {
   );
 }
 
-function FileInput({ label, accept, required = false, onChange }) {
+function FileInput({ onChange }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1 block text-black/60">{label}{required && <span className="text-red-600"> *</span>}</span>
+      <span className="mb-1 block text-black/60">Shapefile bundle <span className="text-red-600">*</span></span>
       <input
         type="file"
-        accept={accept}
-        required={required}
+        accept=".shp,.dbf,.shx,.prj"
+        required
+        multiple
         onChange={(event) => onChange(event.target.files)}
         className="w-full rounded-md border border-dashed border-black/20 bg-black/[0.02] px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-emerald-800"
       />
+      <span className="mt-1 block text-xs text-black/45">Select the .shp, .dbf, .shx, and .prj files together.</span>
     </label>
   );
 }

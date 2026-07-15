@@ -6,6 +6,7 @@ import { parseAoiGeometryFromShp } from "../services/shapefileParser.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const requiredShapefileExtensions = [".shp", ".dbf", ".shx", ".prj"];
 
 router.use(authenticate);
 
@@ -44,12 +45,7 @@ router.get("/:id", async (req, res, next) => {
 
 router.post(
   "/",
-  upload.fields([
-    { name: "shp", maxCount: 1 },
-    { name: "dbf", maxCount: 1 },
-    { name: "shx", maxCount: 1 },
-    { name: "prj", maxCount: 1 }
-  ]),
+  upload.any(),
   async (req, res, next) => {
     try {
       const name = String(req.body.name || "").trim();
@@ -64,7 +60,16 @@ router.post(
         return res.status(409).json({ error: "An AOI with this name already exists" });
       }
 
-      const shpFile = req.files?.shp?.[0];
+      const filesByExtension = shapefilePartsByExtension(req.files);
+      const missing = requiredShapefileExtensions.filter((extension) => !filesByExtension[extension]);
+      if (missing.length) {
+        return res.status(400).json({
+          error: `Missing shapefile part${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}`,
+          missing
+        });
+      }
+
+      const shpFile = filesByExtension[".shp"];
       if (!shpFile?.buffer) {
         return res.status(400).json({ error: "A valid .shp file is required" });
       }
@@ -95,5 +100,15 @@ router.post(
     }
   }
 );
+
+function shapefilePartsByExtension(files = []) {
+  return files.reduce((parts, file) => {
+    const extension = file.originalname?.toLowerCase().match(/\.[^.]+$/)?.[0];
+    if (requiredShapefileExtensions.includes(extension) && !parts[extension]) {
+      parts[extension] = file;
+    }
+    return parts;
+  }, {});
+}
 
 export default router;
