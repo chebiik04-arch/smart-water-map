@@ -94,6 +94,7 @@ async function main() {
       email: "admin@smartwater.local",
       passwordHash: adminPassword,
       role: "admin",
+      adminScope: "TENANT",
       district: "Makueni",
       points: 120
     }

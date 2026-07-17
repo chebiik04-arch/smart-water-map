@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { deviceIngestionRateLimit } from "../middleware/rateLimit.js";
 import { createSensorReading } from "../services/readingService.js";
 import { hashApiKey } from "../utils/apiKeys.js";
 
@@ -47,7 +48,7 @@ router.post("/devices", authenticate, requireRole("admin", "field_agent"), async
   }
 });
 
-router.post("/readings", async (req, res, next) => {
+router.post("/readings", deviceIngestionRateLimit, async (req, res, next) => {
   try {
     const token = req.headers["x-sensor-token"];
     const externalId = req.headers["x-sensor-id"] || req.body.externalId;
@@ -70,7 +71,7 @@ router.post("/readings", async (req, res, next) => {
   }
 });
 
-router.post("/readings/batch", async (req, res, next) => {
+router.post("/readings/batch", deviceIngestionRateLimit, async (req, res, next) => {
   try {
     const token = req.headers["x-sensor-token"];
     const input = z.object({ readings: z.array(readingSchema.extend({ externalId: z.string().min(2) })).min(1).max(500) }).parse(req.body);

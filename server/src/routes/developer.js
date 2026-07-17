@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { apiKeyManagementRateLimit } from "../middleware/rateLimit.js";
 import { generateApiKey, hashApiKey, keyPrefix } from "../utils/apiKeys.js";
 import { paginationParams } from "../utils/http.js";
 
@@ -20,7 +21,7 @@ router.get("/portal", (req, res) => {
   });
 });
 
-router.post("/api-keys", authenticate, requireRole("admin"), async (req, res, next) => {
+router.post("/api-keys", authenticate, requireRole("admin"), apiKeyManagementRateLimit, async (req, res, next) => {
   try {
     const input = z.object({
       name: z.string().min(2),
@@ -44,7 +45,7 @@ router.post("/api-keys", authenticate, requireRole("admin"), async (req, res, ne
   }
 });
 
-router.get("/api-keys", authenticate, requireRole("admin"), async (req, res, next) => {
+router.get("/api-keys", authenticate, requireRole("admin"), apiKeyManagementRateLimit, async (req, res, next) => {
   try {
     const { limit, offset } = paginationParams(req.query);
     const keys = await prisma.apiKey.findMany({
@@ -60,7 +61,7 @@ router.get("/api-keys", authenticate, requireRole("admin"), async (req, res, nex
   }
 });
 
-router.get("/usage", authenticate, requireRole("admin"), async (req, res, next) => {
+router.get("/usage", authenticate, requireRole("admin"), apiKeyManagementRateLimit, async (req, res, next) => {
   try {
     const { limit, offset } = paginationParams(req.query);
     const usage = await prisma.apiUsage.findMany({

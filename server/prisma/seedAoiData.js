@@ -48,6 +48,7 @@ async function ensureAdmin(tenantId) {
       email: "admin@smartwater.local",
       passwordHash,
       role: "admin",
+      adminScope: "TENANT",
       district: "Kenya",
       points: 120
     }

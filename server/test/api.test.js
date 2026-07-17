@@ -28,6 +28,7 @@ describe("API hardening", () => {
   });
 
   afterAll(async () => {
+    await prisma.refreshToken.deleteMany({ where: { user: { tenantId: { in: [tenant.id, otherTenant.id] } } } });
     await prisma.apiUsage.deleteMany({ where: { apiKey: { tenantId: { in: [tenant.id, otherTenant.id] } } } });
     await prisma.apiKey.deleteMany({ where: { tenantId: { in: [tenant.id, otherTenant.id] } } });
     await prisma.marketImportRun.deleteMany({ where: { tenantId: { in: [tenant.id, otherTenant.id] } } });
@@ -53,6 +54,8 @@ describe("API hardening", () => {
       .send({ name: "Admin User", email: `admin-${runId}@example.com`, password: "password123", role: "admin" })
       .expect(201);
     expect(admin.body.user.tenantId).toBe(tenant.id);
+    expect(admin.body.user.adminScope).toBe("TENANT");
+    expect(admin.body.refreshToken).toBeTruthy();
     adminToken = admin.body.token;
 
     const community = await request(app)
@@ -68,6 +71,7 @@ describe("API hardening", () => {
       .send({ email: `admin-${runId}@example.com`, password: "password123" })
       .expect(200);
     expect(login.body.token).toBeTruthy();
+    expect(login.body.refreshToken).toBeTruthy();
   });
 
   it("returns standardized 400 responses for validation errors", async () => {
@@ -82,6 +86,23 @@ describe("API hardening", () => {
       details: expect.any(Array)
     });
     expect(response.body.details[0]).toMatchObject({ path: ["email"] });
+  });
+
+  it("rate-limits repeated login attempts", async () => {
+    const email = `rate-limit-${runId}@example.com`;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await request(app)
+        .post("/api/v1/auth/login")
+        .send({ email, password: "wrong-password" })
+        .expect(401);
+    }
+
+    const limited = await request(app)
+      .post("/api/v1/auth/login")
+      .send({ email, password: "wrong-password" })
+      .expect(429);
+
+    expect(limited.body.code).toBe("RATE_LIMITED");
   });
 
   it("rejects invalid UUID path params before route handlers query Prisma", async () => {
@@ -201,12 +222,52 @@ describe("API hardening", () => {
       .expect(200);
     expect(tenants.body[0].id).toBe(tenant.id);
 
+    await request(app)
+      .post("/api/v1/tenants")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Blocked Tenant", slug: `blocked-${runId}`, country: "Kenya" })
+      .expect(403);
+
     const createdUser = await request(app)
       .post(`/api/v1/tenants/${tenant.id}/users`)
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ name: "Field Agent", email: `field-${runId}@example.com`, password: "password123", role: "field_agent" })
       .expect(201);
     expect(createdUser.body.role).toBe("field_agent");
+  });
+
+  it("rejects active and refresh tokens after user deactivation", async () => {
+    const email = `deactivate-${runId}@example.com`;
+    await request(app)
+      .post(`/api/v1/tenants/${tenant.id}/users`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Deactivate Me", email, password: "password123", role: "field_agent" })
+      .expect(201);
+
+    const login = await request(app)
+      .post("/api/v1/auth/login")
+      .send({ email, password: "password123" })
+      .expect(200);
+
+    await request(app)
+      .get("/api/v1/sensors/operations/tickets")
+      .set("Authorization", `Bearer ${login.body.token}`)
+      .expect(200);
+
+    await request(app)
+      .post(`/api/v1/tenants/${tenant.id}/users/${login.body.user.id}/deactivate`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    await request(app)
+      .get("/api/v1/sensors/operations/tickets")
+      .set("Authorization", `Bearer ${login.body.token}`)
+      .expect(401);
+
+    await request(app)
+      .post("/api/v1/auth/refresh")
+      .send({ refreshToken: login.body.refreshToken })
+      .expect(401);
   });
 
   it("maintains WhatsApp conversation state and creates a report", async () => {

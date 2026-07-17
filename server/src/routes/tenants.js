@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
-import { authenticate, requireRole } from "../middleware/auth.js";
+import { authenticate, requireAdminScope, requireRole } from "../middleware/auth.js";
 import { paginationParams } from "../utils/http.js";
 
 const router = Router();
@@ -24,9 +24,8 @@ router.get("/", authenticate, requireRole("admin"), async (req, res, next) => {
   }
 });
 
-router.post("/", authenticate, requireRole("admin"), async (req, res, next) => {
+router.post("/", authenticate, requireRole("admin"), requireAdminScope("PLATFORM"), async (req, res, next) => {
   try {
-    if (req.user.tenantId) return res.status(403).json({ error: "Only platform admins can create tenants" });
     const input = tenantSchema.parse(req.body);
     const tenant = await prisma.tenant.create({
       data: { name: input.name, slug: input.slug, country: input.country, billingPlan: input.billingPlan, config: input.config || {} }
@@ -71,8 +70,16 @@ router.post("/:id/users", authenticate, requireRole("admin"), async (req, res, n
     const input = userSchema.parse(req.body);
     const passwordHash = await bcrypt.hash(input.password, 12);
     const user = await prisma.user.create({
-      data: { tenantId: req.params.id, name: input.name, email: input.email, passwordHash, role: input.role, district: input.district },
-      select: { id: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
+      data: {
+        tenantId: req.params.id,
+        name: input.name,
+        email: input.email,
+        passwordHash,
+        role: input.role,
+        adminScope: input.role === "admin" ? "TENANT" : null,
+        district: input.district
+      },
+      select: userSelect
     });
     res.status(201).json(user);
   } catch (err) {
@@ -91,10 +98,21 @@ router.patch("/:tenantId/users/:userId", authenticate, requireRole("admin"), asy
       data.passwordHash = await bcrypt.hash(input.password, 12);
       delete data.password;
     }
-    const user = await prisma.user.update({
-      where: { id: req.params.userId },
-      data,
-      select: { id: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
+    if (input.role) data.adminScope = input.role === "admin" ? "TENANT" : null;
+    if (input.status === "INACTIVE") data.tokenVersion = { increment: 1 };
+    const user = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id: req.params.userId },
+        data,
+        select: userSelect
+      });
+      if (input.status === "INACTIVE") {
+        await tx.refreshToken.updateMany({
+          where: { userId: req.params.userId, revokedAt: null },
+          data: { revokedAt: new Date() }
+        });
+      }
+      return updated;
     });
     res.json(user);
   } catch (err) {
@@ -105,10 +123,17 @@ router.patch("/:tenantId/users/:userId", authenticate, requireRole("admin"), asy
 router.post("/:tenantId/users/:userId/deactivate", authenticate, requireRole("admin"), async (req, res, next) => {
   try {
     if (req.user.tenantId && req.user.tenantId !== req.params.tenantId) return res.status(404).json({ error: "Tenant not found" });
-    const user = await prisma.user.update({
-      where: { id: req.params.userId },
-      data: { status: "INACTIVE" },
-      select: { id: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
+    const user = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id: req.params.userId },
+        data: { status: "INACTIVE", tokenVersion: { increment: 1 } },
+        select: userSelect
+      });
+      await tx.refreshToken.updateMany({
+        where: { userId: req.params.userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
+      return updated;
     });
     res.json(user);
   } catch (err) {
@@ -142,5 +167,20 @@ const userUpdateSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
   district: z.string().optional()
 });
+
+const userSelect = {
+  id: true,
+  tenantId: true,
+  name: true,
+  email: true,
+  role: true,
+  adminScope: true,
+  status: true,
+  tokenVersion: true,
+  district: true,
+  points: true,
+  lastLoginAt: true,
+  createdAt: true
+};
 
 export default router;

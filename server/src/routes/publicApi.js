@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { prisma } from "../config/prisma.js";
 import { requireApiKey } from "../middleware/apiKeyAuth.js";
+import { publicApiRateLimit } from "../middleware/rateLimit.js";
 import { paginationParams } from "../utils/http.js";
 
 const router = Router();
+router.use(publicApiRateLimit);
 router.use(requireApiKey);
 
 router.get("/districts", async (req, res, next) => {

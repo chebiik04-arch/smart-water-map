@@ -16,6 +16,12 @@ export async function authenticate(req, res, next) {
     if (!user) {
       return res.status(401).json({ error: "Invalid token subject" });
     }
+    if (user.status !== "ACTIVE") {
+      return res.status(401).json({ error: "User account is inactive", code: "USER_INACTIVE" });
+    }
+    if (payload.tokenVersion !== user.tokenVersion) {
+      return res.status(401).json({ error: "Token has been revoked", code: "TOKEN_REVOKED" });
+    }
     req.user = user;
     return next();
   } catch {
@@ -32,3 +38,11 @@ export function requireRole(...roles) {
   };
 }
 
+export function requireAdminScope(...scopes) {
+  return (req, res, next) => {
+    if (!req.user || req.user.role !== "admin" || !scopes.includes(req.user.adminScope)) {
+      return res.status(403).json({ error: "Insufficient admin scope" });
+    }
+    return next();
+  };
+}
