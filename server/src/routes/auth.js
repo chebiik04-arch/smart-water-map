@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { env } from "../config/env.js";
 import { loginRateLimit, registrationRateLimit } from "../middleware/rateLimit.js";
+import { metrics } from "../services/metrics.js";
 import { hashApiKey } from "../utils/apiKeys.js";
 
 const router = Router();
@@ -42,9 +43,13 @@ router.post("/login", loginRateLimit, async (req, res, next) => {
     const { email, password } = z.object({ email: z.string().email(), password: z.string() }).parse(req.body);
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      metrics.increment("auth_failures_total", { reason: "invalid_login" });
       return res.status(401).json({ error: "Invalid email or password" });
     }
-    if (user.status !== "ACTIVE") return res.status(403).json({ error: "User account is inactive" });
+    if (user.status !== "ACTIVE") {
+      metrics.increment("auth_failures_total", { reason: "inactive_login" });
+      return res.status(403).json({ error: "User account is inactive" });
+    }
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -65,9 +70,11 @@ router.post("/refresh", async (req, res, next) => {
       include: { user: { select: userSelect } }
     });
     if (!stored || stored.revokedAt || stored.expiresAt <= new Date()) {
+      metrics.increment("auth_failures_total", { reason: "invalid_refresh_token" });
       return res.status(401).json({ error: "Invalid or expired refresh token", code: "REFRESH_TOKEN_INVALID" });
     }
     if (stored.user.status !== "ACTIVE") {
+      metrics.increment("auth_failures_total", { reason: "inactive_refresh" });
       await revokeUserRefreshTokens(stored.user.id);
       return res.status(401).json({ error: "User account is inactive", code: "USER_INACTIVE" });
     }

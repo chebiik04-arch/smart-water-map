@@ -88,6 +88,15 @@ describe("API hardening", () => {
     expect(response.body.details[0]).toMatchObject({ path: ["email"] });
   });
 
+  it("adds request IDs and exposes metrics", async () => {
+    const health = await request(app).get("/health").expect(200);
+    expect(health.headers["x-request-id"]).toBeTruthy();
+
+    const metrics = await request(app).get("/metrics").expect(200);
+    expect(metrics.text).toContain("http_requests_total");
+    expect(metrics.text).toContain("http_request_duration_seconds");
+  });
+
   it("rate-limits repeated login attempts", async () => {
     const email = `rate-limit-${runId}@example.com`;
     for (let attempt = 0; attempt < 10; attempt += 1) {

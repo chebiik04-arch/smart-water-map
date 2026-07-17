@@ -1,3 +1,5 @@
+import { metrics } from "../services/metrics.js";
+
 const buckets = new Map();
 
 export function rateLimit({ windowMs, max, keyPrefix = "global", key = defaultKey }) {
@@ -13,6 +15,7 @@ export function rateLimit({ windowMs, max, keyPrefix = "global", key = defaultKe
 
     bucket.count += 1;
     if (bucket.count > max) {
+      metrics.increment("rate_limit_hits_total", { limiter: keyPrefix });
       res.set("Retry-After", String(Math.ceil((bucket.resetAt - now) / 1000)));
       return res.status(429).json({
         error: "Too many requests",

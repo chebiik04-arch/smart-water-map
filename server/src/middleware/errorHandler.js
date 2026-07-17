@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { logger } from "../utils/logger.js";
 
 export function standardizeErrorResponses(req, res, next) {
   const json = res.json.bind(res);
@@ -38,7 +39,13 @@ export function errorHandler(err, req, res, next) {
     : err.details || [];
   const message = status >= 500 ? "Internal server error" : err.message;
   if (status >= 500) {
-    console.error(err);
+    logger.error("unhandled_error", {
+      requestId: req.id,
+      method: req.method,
+      path: req.originalUrl,
+      error: err.message,
+      stack: err.stack
+    });
   }
   return res.status(status).json({ error: message, code, details });
 }

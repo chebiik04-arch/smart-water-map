@@ -6,6 +6,7 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../config/env.js";
 import { prisma } from "../config/prisma.js";
+import { emitOperationalAlert } from "./alerts.js";
 
 export async function saveReportEvidence(file, { tenantId, reportId } = {}) {
   const checksumSha256 = crypto.createHash("sha256").update(file.buffer).digest("hex");
@@ -13,9 +14,19 @@ export async function saveReportEvidence(file, { tenantId, reportId } = {}) {
   const moderation = await moderateImage(file);
   const provider = env.uploadProvider.toLowerCase();
 
-  const stored = provider === "s3"
-    ? await saveToS3(file)
-    : await saveToLocal(file);
+  let stored;
+  try {
+    stored = provider === "s3"
+      ? await saveToS3(file)
+      : await saveToLocal(file);
+  } catch (error) {
+    emitOperationalAlert("upload_storage_failure", "Upload storage failed", {
+      provider,
+      error: error.message,
+      tenantId
+    });
+    throw error;
+  }
 
   const asset = await prisma.uploadAsset.create({
     data: {
@@ -68,7 +79,17 @@ export async function createSignedUploadUrl({ filename, mimeType, tenantId }) {
     Key: objectKey,
     ContentType: mimeType
   });
-  const signedUrl = await getSignedUrl(client, command, { expiresIn: env.uploadSignedUrlTtlSeconds });
+  let signedUrl;
+  try {
+    signedUrl = await getSignedUrl(client, command, { expiresIn: env.uploadSignedUrlTtlSeconds });
+  } catch (error) {
+    emitOperationalAlert("upload_storage_failure", "Signed upload URL creation failed", {
+      provider: "s3",
+      error: error.message,
+      tenantId
+    });
+    throw error;
+  }
   return {
     provider: "s3",
     bucket: env.s3Bucket,

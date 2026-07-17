@@ -34,5 +34,6 @@ export const env = {
   clamavHost: process.env.CLAMAV_HOST || "",
   clamavPort: Number(process.env.CLAMAV_PORT || 3310),
   imageModerationUrl: process.env.IMAGE_MODERATION_URL || "",
-  imageModerationApiKey: process.env.IMAGE_MODERATION_API_KEY || ""
+  imageModerationApiKey: process.env.IMAGE_MODERATION_API_KEY || "",
+  operationalAlertWebhookUrl: process.env.OPERATIONAL_ALERT_WEBHOOK_URL || ""
 };

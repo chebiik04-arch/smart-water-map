@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
+import { emitOperationalAlert } from "../src/services/alerts.js";
 
 const requiredIndexes = [
   "SensorDevice_tenantId_externalId_key",
@@ -20,7 +21,12 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-await run("npx", ["prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]);
+try {
+  await run("npx", ["prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]);
+} catch (error) {
+  emitOperationalAlert("migration_failure", "Migration check failed during deploy", { error: error.message });
+  throw error;
+}
 
 const prisma = new PrismaClient();
 

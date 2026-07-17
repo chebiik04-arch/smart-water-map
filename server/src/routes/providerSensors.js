@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { deviceIngestionRateLimit } from "../middleware/rateLimit.js";
+import { metrics } from "../services/metrics.js";
 import { createSensorReading } from "../services/readingService.js";
 import { hashApiKey } from "../utils/apiKeys.js";
 
@@ -52,12 +53,18 @@ router.post("/readings", deviceIngestionRateLimit, async (req, res, next) => {
   try {
     const token = req.headers["x-sensor-token"];
     const externalId = req.headers["x-sensor-id"] || req.body.externalId;
-    if (!token || !externalId) return res.status(401).json({ error: "Missing sensor credentials" });
+    if (!token || !externalId) {
+      metrics.increment("device_ingestion_total", { outcome: "missing_credentials" });
+      return res.status(401).json({ error: "Missing sensor credentials" });
+    }
     const device = await prisma.sensorDevice.findFirst({
       where: { externalId: String(externalId), authTokenHash: hashApiKey(String(token)) },
       include: { sensor: true }
     });
-    if (!device) return res.status(401).json({ error: "Invalid sensor credentials" });
+    if (!device) {
+      metrics.increment("device_ingestion_total", { outcome: "invalid_credentials" });
+      return res.status(401).json({ error: "Invalid sensor credentials" });
+    }
     const input = readingSchema.parse(req.body);
     await prisma.sensorDevice.update({ where: { id: device.id }, data: { lastAuthenticated: new Date() } });
     const reading = await createSensorReading(device.sensorId, {
@@ -65,6 +72,7 @@ router.post("/readings", deviceIngestionRateLimit, async (req, res, next) => {
       unit: input.unit,
       metadata: { source: "device_push", providerTimestamp: input.timestamp, ...(input.metadata || {}) }
     });
+    metrics.increment("device_ingestion_total", { outcome: "accepted" });
     res.status(201).json(reading);
   } catch (err) {
     next(err);
@@ -75,7 +83,10 @@ router.post("/readings/batch", deviceIngestionRateLimit, async (req, res, next) 
   try {
     const token = req.headers["x-sensor-token"];
     const input = z.object({ readings: z.array(readingSchema.extend({ externalId: z.string().min(2) })).min(1).max(500) }).parse(req.body);
-    if (!token) return res.status(401).json({ error: "Missing sensor token" });
+    if (!token) {
+      metrics.increment("device_ingestion_total", { outcome: "missing_credentials" });
+      return res.status(401).json({ error: "Missing sensor token" });
+    }
     const created = [];
     for (const row of input.readings) {
       const device = await prisma.sensorDevice.findFirst({
@@ -89,6 +100,8 @@ router.post("/readings/batch", deviceIngestionRateLimit, async (req, res, next) 
         metadata: { source: "device_batch_push", providerTimestamp: row.timestamp, ...(row.metadata || {}) }
       }));
     }
+    metrics.increment("device_ingestion_total", { outcome: "accepted" }, created.length);
+    metrics.increment("device_ingestion_total", { outcome: "skipped" }, input.readings.length - created.length);
     res.status(201).json({ createdCount: created.length, readings: created });
   } catch (err) {
     next(err);
