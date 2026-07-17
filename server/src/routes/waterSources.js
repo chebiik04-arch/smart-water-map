@@ -3,11 +3,13 @@ import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { emitWaterSourceUpdate } from "../services/socket.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
 router.get("/", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const filters = {
       districtId: req.query.districtId || null,
       type: req.query.type || null,
@@ -33,6 +35,8 @@ router.get("/", async (req, res, next) => {
         AND (${filters.status}::"SourceStatus" IS NULL OR ws.status = ${filters.status}::"SourceStatus")
         AND (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY ws.name ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
 
     res.json({
@@ -78,6 +82,7 @@ router.get("/:id", async (req, res, next) => {
 
 router.get("/:id/readings", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const days = Math.max(1, Math.min(365, Number(req.query.days || 30)));
     const readings = await prisma.waterSourceReading.findMany({
       where: {
@@ -85,7 +90,9 @@ router.get("/:id/readings", async (req, res, next) => {
         timestamp: { gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) },
         source: { district: req.tenantId ? { tenantId: req.tenantId } : {} }
       },
-      orderBy: { timestamp: "asc" }
+      orderBy: { timestamp: "asc" },
+      take: limit,
+      skip: offset
     });
     res.json(readings);
   } catch (err) {

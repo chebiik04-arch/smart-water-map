@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { simulateGroundwaterScenario } from "../services/digitalTwin.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
@@ -50,10 +51,12 @@ router.post("/groundwater", authenticate, requireRole("admin", "field_agent"), a
 
 router.get("/", authenticate, async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 50 });
     const simulations = await prisma.digitalTwinSimulation.findMany({
       where: req.user.tenantId ? { tenantId: req.user.tenantId } : {},
       orderBy: { createdAt: "desc" },
-      take: 50
+      take: limit,
+      skip: offset
     });
     res.json(simulations);
   } catch (err) {

@@ -5,6 +5,7 @@ import { authenticate, requireRole } from "../middleware/auth.js";
 import { buildIrrigationAdvice } from "../services/irrigationAdvisor.js";
 import { recommendationRationale, scoreCropVariety } from "../services/cropRecommender.js";
 import { fetchExternalMarketPrices, marketDecisionHint } from "../services/marketPrices.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
@@ -49,11 +50,13 @@ router.post("/irrigation/schedule", authenticate, requireRole("admin", "field_ag
 
 router.get("/irrigation/schedules", authenticate, async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 50 });
     const schedules = await prisma.irrigationSchedule.findMany({
       where: { district: req.user.tenantId ? { tenantId: req.user.tenantId } : {} },
       include: { district: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
-      take: 50
+      take: limit,
+      skip: offset
     });
     res.json(schedules);
   } catch (err) {
@@ -63,6 +66,7 @@ router.get("/irrigation/schedules", authenticate, async (req, res, next) => {
 
 router.get("/crops/recommendations/:districtId", authenticate, async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 8 });
     const district = await prisma.district.findFirst({
       where: { id: req.params.districtId, ...(req.user.tenantId ? { tenantId: req.user.tenantId } : {}) }
     });
@@ -79,7 +83,7 @@ router.get("/crops/recommendations/:districtId", authenticate, async (req, res, 
         rationale: recommendationRationale(variety, { riskLevel: district.droughtRiskLevel, ndvi: metrics.ndvi })
       }))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 8);
+      .slice(offset, offset + limit);
     res.json({ district, metrics, recommendations });
   } catch (err) {
     next(err);
@@ -88,6 +92,7 @@ router.get("/crops/recommendations/:districtId", authenticate, async (req, res, 
 
 router.get("/market/prices", authenticate, async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 100 });
     let external = [];
     try {
       external = await fetchExternalMarketPrices();
@@ -97,7 +102,8 @@ router.get("/market/prices", authenticate, async (req, res, next) => {
     const stored = await prisma.marketPrice.findMany({
       where: req.user.tenantId ? { tenantId: req.user.tenantId } : {},
       orderBy: { observedAt: "desc" },
-      take: 100
+      take: limit,
+      skip: offset
     });
     res.json({ external, stored });
   } catch (err) {
@@ -127,6 +133,8 @@ router.post("/market/prices", authenticate, requireRole("admin", "field_agent"),
 
 router.get("/livestock/water-stress", authenticate, async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
+    const pasturePagination = paginationParams(req.query, { defaultLimit: 30 });
     const waterPoints = await prisma.$queryRaw`
       SELECT wp.id, wp.name, wp.status, wp."districtId", d.name AS "districtName", wp."waterVolumeLiters",
         wp."dailyDemandLiters", wp."daysRemaining", wp."supportedLivestock", wp."lastUpdatedAt",
@@ -135,12 +143,15 @@ router.get("/livestock/water-stress", authenticate, async (req, res, next) => {
       JOIN "District" d ON d.id = wp."districtId"
       WHERE (${req.user.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.user.tenantId || null}::uuid)
       ORDER BY wp."daysRemaining" ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
     const pasture = await prisma.pastureCondition.findMany({
       where: { district: req.user.tenantId ? { tenantId: req.user.tenantId } : {} },
       include: { district: { select: { name: true } } },
       orderBy: { observedAt: "desc" },
-      take: 30
+      take: pasturePagination.limit,
+      skip: pasturePagination.offset
     });
     res.json({ waterPoints, pasture });
   } catch (err) {

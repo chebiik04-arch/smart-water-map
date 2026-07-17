@@ -5,12 +5,14 @@ import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { createSensorReading } from "../services/readingService.js";
 import { hashApiKey } from "../utils/apiKeys.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
 router.get("/", async (req, res, next) => {
   try {
     const { type, district } = req.query;
+    const { limit, offset } = paginationParams(req.query);
     const rows = await prisma.$queryRaw`
       SELECT s.id, s.type, s.status, s."lastPing", s."districtId",
         d.name AS "districtName", ST_AsGeoJSON(s.location)::json AS location,
@@ -32,6 +34,8 @@ router.get("/", async (req, res, next) => {
         AND (${district || null}::uuid IS NULL OR s."districtId" = ${district || null}::uuid)
         AND (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY s."lastPing" DESC NULLS LAST
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
     res.json(rows.map(formatSensor));
   } catch (err) {
@@ -56,39 +60,43 @@ router.post("/", authenticate, requireRole("admin", "field_agent"), async (req, 
       rssi: input.rssi
     };
 
-    const [sensor] = await prisma.$queryRaw`
-      INSERT INTO "Sensor" (id, type, location, "districtId", status, "lastPing")
-      VALUES (gen_random_uuid(), ${sensorType}::"SensorType",
-        ST_SetSRID(ST_MakePoint(${district.longitude}, ${district.latitude}), 4326),
-        ${district.id}::uuid, ${sensorStatus}::"SensorStatus", ${input.last_updated ? new Date(input.last_updated) : new Date()})
-      RETURNING id
-    `;
-
-    await prisma.sensorDevice.create({
-      data: {
-        sensorId: sensor.id,
-        tenantId: district.tenantId,
-        externalId: sensorId,
-        authTokenHash: hashApiKey(crypto.randomBytes(24).toString("hex")),
-        provider: "dashboard",
-        metadata
-      }
-    });
-
     const readingValue = parseReadingValue(input.reading);
-    if (readingValue !== null && sensorStatus !== "OFFLINE") {
-      await prisma.sensorReading.create({
+    const createdSensorId = await prisma.$transaction(async (tx) => {
+      const [sensor] = await tx.$queryRaw`
+        INSERT INTO "Sensor" (id, type, location, "districtId", status, "lastPing")
+        VALUES (gen_random_uuid(), ${sensorType}::"SensorType",
+          ST_SetSRID(ST_MakePoint(${district.longitude}, ${district.latitude}), 4326),
+          ${district.id}::uuid, ${sensorStatus}::"SensorStatus", ${input.last_updated ? new Date(input.last_updated) : new Date()})
+        RETURNING id
+      `;
+
+      await tx.sensorDevice.create({
         data: {
           sensorId: sensor.id,
-          value: readingValue,
-          unit: unitForSensorType(sensorType),
-          timestamp: input.last_updated ? new Date(input.last_updated) : new Date(),
-          metadata: { battery: metadata.battery }
+          tenantId: district.tenantId,
+          externalId: sensorId,
+          authTokenHash: hashApiKey(crypto.randomBytes(24).toString("hex")),
+          provider: "dashboard",
+          metadata
         }
       });
-    }
 
-    const [created] = await sensorRows({ id: sensor.id, tenantId: req.user.tenantId });
+      if (readingValue !== null && sensorStatus !== "OFFLINE") {
+        await tx.sensorReading.create({
+          data: {
+            sensorId: sensor.id,
+            value: readingValue,
+            unit: unitForSensorType(sensorType),
+            timestamp: input.last_updated ? new Date(input.last_updated) : new Date(),
+            metadata: { battery: metadata.battery }
+          }
+        });
+      }
+
+      return sensor.id;
+    });
+
+    const [created] = await sensorRows({ id: createdSensorId, tenantId: req.user.tenantId });
     res.status(201).json(formatSensor(created));
   } catch (err) {
     next(err);
@@ -121,6 +129,7 @@ router.get("/summary", async (req, res, next) => {
 router.get("/operations/health", authenticate, requireRole("admin", "field_agent"), async (req, res, next) => {
   try {
     const staleHours = Number(req.query.staleHours || 6);
+    const { limit, offset } = paginationParams(req.query);
     const rows = await prisma.$queryRaw`
       SELECT s.id, s.type, s.status, s."lastPing", s."districtId", d.name AS "districtName",
         EXTRACT(EPOCH FROM (NOW() - COALESCE(s."lastPing", NOW() - interval '999 hours'))) / 3600 AS "hoursSincePing",
@@ -131,6 +140,8 @@ router.get("/operations/health", authenticate, requireRole("admin", "field_agent
       WHERE (${req.user.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.user.tenantId || null}::uuid)
       GROUP BY s.id, d.name
       ORDER BY "hoursSincePing" DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
     res.json({ staleHours, sensors: rows, stale: rows.filter((row) => Number(row.hoursSincePing) >= staleHours) });
   } catch (err) {
@@ -140,11 +151,13 @@ router.get("/operations/health", authenticate, requireRole("admin", "field_agent
 
 router.get("/operations/tickets", authenticate, requireRole("admin", "field_agent"), async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const tickets = await prisma.maintenanceTicket.findMany({
       where: { sensor: { district: req.user.tenantId ? { tenantId: req.user.tenantId } : {} } },
       include: { sensor: { select: { id: true, type: true, status: true, lastPing: true } } },
       orderBy: { createdAt: "desc" },
-      take: 100
+      take: limit,
+      skip: offset
     });
     res.json(tickets);
   } catch (err) {
@@ -208,6 +221,7 @@ router.post("/:id/reading", authenticate, requireRole("admin", "field_agent"), a
 
 router.get("/:id/readings", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const readings = await prisma.sensorReading.findMany({
       where: {
@@ -215,7 +229,9 @@ router.get("/:id/readings", async (req, res, next) => {
         timestamp: { gte: since },
         sensor: { district: req.tenantId ? { tenantId: req.tenantId } : {} }
       },
-      orderBy: { timestamp: "asc" }
+      orderBy: { timestamp: "asc" },
+      take: limit,
+      skip: offset
     });
     res.json(readings);
   } catch (err) {

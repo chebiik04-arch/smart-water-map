@@ -1,16 +1,20 @@
 import { Router } from "express";
 import { prisma } from "../config/prisma.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
 router.get("/", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const rows = await prisma.$queryRaw`
       SELECT id, name, "droughtRiskLevel", "createdAt",
         ST_AsGeoJSON(geometry)::json AS geometry
       FROM "District"
       WHERE (${req.tenantId || null}::uuid IS NULL OR "tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY name ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
     res.json({
       type: "FeatureCollection",

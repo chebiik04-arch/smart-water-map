@@ -8,6 +8,7 @@ import { saveReportEvidence } from "../services/uploadStorage.js";
 import { sendIvrAcknowledgement, sendWhatsAppMessage } from "../providers/messagingProvider.js";
 import { ivrResponse, parseIvrInbound, parseWhatsAppInbound, verifyInboundSignature } from "../providers/messagingInboundProvider.js";
 import { advanceReportConversation } from "../services/conversationService.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 const upload = multer({
@@ -22,7 +23,7 @@ const upload = multer({
 router.get("/reports", async (req, res, next) => {
   try {
     const districtId = req.query.districtId || null;
-    const limit = Math.max(1, Math.min(100, Number(req.query.limit || 100)));
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 100 });
     const rows = await prisma.$queryRaw`
       SELECT cr.id, cr."userId", cr."districtId", cr."waterLevel", cr.description, cr."photoUrl",
         cr."photoMetadata", cr."gpsAccuracyMeters", cr.source, cr."externalReporterPhone", cr.status, cr."createdAt",
@@ -34,6 +35,7 @@ router.get("/reports", async (req, res, next) => {
         AND (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY cr."createdAt" DESC
       LIMIT ${limit}
+      OFFSET ${offset}
     `;
     res.json(rows.map((row) => ({
       ...row,
@@ -199,10 +201,12 @@ router.post("/reports/:id/verify", authenticate, requireRole("admin", "field_age
 
 router.get("/leaderboard", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 20 });
     const leaders = await prisma.user.findMany({
       where: { role: { in: ["field_agent", "community_user"] }, ...(req.tenantId ? { tenantId: req.tenantId } : {}) },
       orderBy: [{ points: "desc" }, { createdAt: "asc" }],
-      take: 20,
+      take: limit,
+      skip: offset,
       select: { id: true, name: true, district: true, role: true, points: true }
     });
     res.json(leaders);

@@ -3,6 +3,7 @@ import multer from "multer";
 import { prisma } from "../config/prisma.js";
 import { authenticate } from "../middleware/auth.js";
 import { parseAoiGeometryFromShp } from "../services/shapefileParser.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -10,11 +11,14 @@ const requiredShapefileExtensions = [".shp", ".dbf", ".shx", ".prj"];
 
 router.use(authenticate);
 
-router.get("/", async (_req, res, next) => {
+router.get("/", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const aois = await prisma.aoi.findMany({
       select: { id: true, name: true, type: true, createdAt: true },
-      orderBy: [{ type: "asc" }, { name: "asc" }]
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+      take: limit,
+      skip: offset
     });
     res.json(aois);
   } catch (error) {

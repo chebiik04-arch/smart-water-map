@@ -3,16 +3,20 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
 router.get("/", authenticate, requireRole("admin"), async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const where = req.user.tenantId ? { id: req.user.tenantId } : {};
     const tenants = await prisma.tenant.findMany({
       where,
       include: { _count: { select: { users: true, districts: true, apiKeys: true } } },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset
     });
     res.json(tenants);
   } catch (err) {
@@ -46,10 +50,13 @@ router.patch("/:id", authenticate, requireRole("admin"), async (req, res, next) 
 
 router.get("/:id/users", authenticate, requireRole("admin"), async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     if (req.user.tenantId && req.user.tenantId !== req.params.id) return res.status(404).json({ error: "Tenant not found" });
     const users = await prisma.user.findMany({
       where: { tenantId: req.params.id },
       orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
       select: { id: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
     });
     res.json(users);

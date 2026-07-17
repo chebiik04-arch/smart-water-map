@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { generateApiKey, hashApiKey, keyPrefix } from "../utils/apiKeys.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
@@ -45,9 +46,12 @@ router.post("/api-keys", authenticate, requireRole("admin"), async (req, res, ne
 
 router.get("/api-keys", authenticate, requireRole("admin"), async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const keys = await prisma.apiKey.findMany({
       where: req.user.tenantId ? { tenantId: req.user.tenantId } : {},
       orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
       select: { id: true, name: true, keyPrefix: true, ownerEmail: true, quotaPerHour: true, status: true, createdAt: true, lastUsedAt: true }
     });
     res.json(keys);
@@ -58,11 +62,13 @@ router.get("/api-keys", authenticate, requireRole("admin"), async (req, res, nex
 
 router.get("/usage", authenticate, requireRole("admin"), async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const usage = await prisma.apiUsage.findMany({
       where: { apiKey: req.user.tenantId ? { tenantId: req.user.tenantId } : {} },
       include: { apiKey: { select: { name: true, keyPrefix: true } } },
       orderBy: { usedAt: "desc" },
-      take: 100
+      take: limit,
+      skip: offset
     });
     res.json(usage);
   } catch (err) {
@@ -71,4 +77,3 @@ router.get("/usage", authenticate, requireRole("admin"), async (req, res, next) 
 });
 
 export default router;
-

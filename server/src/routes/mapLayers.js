@@ -1,13 +1,17 @@
 import { Router } from "express";
 import { prisma } from "../config/prisma.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
 router.get("/drought-timeline", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const rows = await prisma.droughtSnapshot.findMany({
       where: { district: req.tenantId ? { tenantId: req.tenantId } : {} },
       orderBy: [{ weekStart: "asc" }, { districtId: "asc" }],
+      take: limit,
+      skip: offset,
       include: { district: { select: { name: true } } }
     });
     res.json(rows);
@@ -18,6 +22,7 @@ router.get("/drought-timeline", async (req, res, next) => {
 
 router.get("/boreholes", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const rows = await prisma.$queryRaw`
       SELECT b.id, b.name, b."districtId", d.name AS "districtName", b."depthMeters",
         b."yieldLitersPerHour", b.status, b."lastInspectedAt",
@@ -26,6 +31,8 @@ router.get("/boreholes", async (req, res, next) => {
       JOIN "District" d ON d.id = b."districtId"
       WHERE (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY b.status ASC, b.name ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
     res.json(rows);
   } catch (err) {
@@ -35,12 +42,15 @@ router.get("/boreholes", async (req, res, next) => {
 
 router.get("/conflict-risks", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const rows = await prisma.$queryRaw`
       SELECT id, name, "riskScore", "incidentsLastYear", notes, "updatedAt",
         ST_AsGeoJSON(geometry)::json AS geometry
       FROM "ConflictRiskArea"
       WHERE (${req.tenantId || null}::uuid IS NULL OR "tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY "riskScore" DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
     res.json(toFeatureCollection(rows, (row) => ({
       name: row.name,
@@ -56,6 +66,7 @@ router.get("/conflict-risks", async (req, res, next) => {
 
 router.get("/hydro-events", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query);
     const rows = await prisma.$queryRaw`
       SELECT h.id, h."districtId", d.name AS "districtName", h."eventType", h.severity,
         h."eventDate", h.notes, ST_AsGeoJSON(h.geometry)::json AS geometry
@@ -63,6 +74,8 @@ router.get("/hydro-events", async (req, res, next) => {
       JOIN "District" d ON d.id = h."districtId"
       WHERE (${req.tenantId || null}::uuid IS NULL OR d."tenantId" = ${req.tenantId || null}::uuid)
       ORDER BY h."eventDate" DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
     res.json(toFeatureCollection(rows, (row) => ({
       districtId: row.districtId,

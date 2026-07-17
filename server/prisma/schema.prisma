@@ -210,6 +210,7 @@ model User {
   aois             Aoi[]
 
   @@index([tenantId])
+  @@index([tenantId, status, createdAt])
   @@index([role])
   @@index([status])
   @@index([district])
@@ -253,6 +254,7 @@ model District {
   pastureConditions    PastureCondition[]
 
   @@index([tenantId])
+  @@index([tenantId, createdAt])
   @@index([droughtRiskLevel])
 }
 
@@ -415,12 +417,15 @@ model Sensor {
   district           District                             @relation(fields: [districtId], references: [id], onDelete: Cascade)
   status             SensorStatus                         @default(ONLINE)
   lastPing           DateTime?
+  createdAt          DateTime                             @default(now())
   readings           SensorReading[]
   maintenanceTickets MaintenanceTicket[]
   device             SensorDevice?
 
   @@index([type])
   @@index([districtId])
+  @@index([districtId, status, lastPing])
+  @@index([districtId, createdAt])
   @@index([status])
 }
 
@@ -430,7 +435,7 @@ model SensorDevice {
   tenant            Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   sensorId          String   @unique @db.Uuid
   sensor            Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
-  externalId        String   @unique
+  externalId        String
   authTokenHash     String
   provider          String   @default("generic_http")
   pollUrl           String?
@@ -438,7 +443,9 @@ model SensorDevice {
   lastAuthenticated DateTime?
   createdAt         DateTime @default(now())
 
+  @@unique([tenantId, externalId])
   @@index([tenantId])
+  @@index([tenantId, createdAt])
   @@index([provider])
 }
 
@@ -458,6 +465,7 @@ model MaintenanceTicket {
 
   @@index([sensorId, status])
   @@index([districtId, status])
+  @@index([districtId, status, createdAt])
 }
 
 model DigitalTwinSimulation {
@@ -493,6 +501,7 @@ model ApiKey {
   usages       ApiUsage[]
 
   @@index([tenantId, status])
+  @@index([tenantId, status, createdAt])
 }
 
 model ApiUsage {
@@ -533,6 +542,7 @@ model WaterSource {
   readings      WaterSourceReading[]
 
   @@index([districtId, type])
+  @@index([districtId, status, createdAt])
   @@index([status])
 }
 
@@ -595,6 +605,7 @@ model DroughtAlert {
   resolvedAt  DateTime?
 
   @@index([districtId, resolvedAt])
+  @@index([districtId, severity, triggeredAt])
   @@index([alertType])
   @@index([severity])
 }
@@ -620,6 +631,7 @@ model CommunityReport {
 
   @@index([userId])
   @@index([districtId, status])
+  @@index([districtId, status, createdAt])
 }
 
 model ReportModeration {

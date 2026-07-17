@@ -10,6 +10,7 @@
     "build": "node --check src/index.js",
     "lint": "eslint src prisma --ext .js",
     "test": "vitest run",
+    "test:migrations": "node scripts/checkMigrations.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

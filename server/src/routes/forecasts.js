@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../config/prisma.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
@@ -41,10 +42,12 @@ router.get("/:districtId/latest", async (req, res, next) => {
 
 router.get("/:districtId", async (req, res, next) => {
   try {
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 30 });
     const forecasts = await prisma.droughtForecast.findMany({
       where: { districtId: req.params.districtId, district: req.tenantId ? { tenantId: req.tenantId } : {} },
       orderBy: { forecastDate: "asc" },
-      take: 30
+      take: limit,
+      skip: offset
     });
     res.json(forecasts);
   } catch (err) {

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/config/prisma.js";
 import { hashApiKey, keyPrefix } from "../src/utils/apiKeys.js";
+import { paginationParams } from "../src/utils/http.js";
 
 const uploadDir = tmp.dirSync({ unsafeCleanup: true });
 process.env.UPLOAD_DIR = uploadDir.name;
@@ -67,6 +68,37 @@ describe("API hardening", () => {
       .send({ email: `admin-${runId}@example.com`, password: "password123" })
       .expect(200);
     expect(login.body.token).toBeTruthy();
+  });
+
+  it("returns standardized 400 responses for validation errors", async () => {
+    const response = await request(app)
+      .post("/api/v1/auth/login")
+      .send({ email: "not-an-email", password: "password123" })
+      .expect(400);
+
+    expect(response.body).toMatchObject({
+      error: expect.any(String),
+      code: "VALIDATION_ERROR",
+      details: expect.any(Array)
+    });
+    expect(response.body.details[0]).toMatchObject({ path: ["email"] });
+  });
+
+  it("rejects invalid UUID path params before route handlers query Prisma", async () => {
+    const response = await request(app)
+      .get("/api/v1/districts/not-a-uuid/status")
+      .expect(400);
+
+    expect(response.body).toEqual({
+      error: "Invalid UUID path parameter",
+      code: "INVALID_UUID",
+      details: [{ path: ["id"], message: "Expected UUID value" }]
+    });
+  });
+
+  it("clamps pagination limits for list endpoints", () => {
+    expect(paginationParams({ limit: "10000", offset: "-5" })).toMatchObject({ limit: 100, offset: 0 });
+    expect(paginationParams({ page: "3", limit: "25" })).toMatchObject({ limit: 25, page: 3, offset: 50 });
   });
 
   it("stores uploaded report evidence and records moderation actions", async () => {
@@ -154,7 +186,12 @@ describe("API hardening", () => {
     expect(hidden.body).toHaveLength(0);
 
     await request(app).get("/api/v1/public/districts").set("x-api-key", rawKey).expect(200);
-    await request(app).get("/api/v1/public/districts").set("x-api-key", rawKey).expect(429);
+    const quota = await request(app).get("/api/v1/public/districts").set("x-api-key", rawKey).expect(429);
+    expect(quota.body).toEqual({
+      error: "API quota exceeded",
+      code: "RATE_LIMITED",
+      details: [{ quotaPerHour: 1 }]
+    });
   });
 
   it("manages tenants and tenant users for admins", async () => {
@@ -211,6 +248,43 @@ describe("API hardening", () => {
 
     const count = await prisma.sensorReading.count({ where: { sensorId: sensor.id } });
     expect(count).toBeGreaterThan(0);
+  });
+
+  it("scopes sensor external IDs to each tenant", async () => {
+    const externalId = `shared-device-${runId}`;
+    const firstSensor = await createSensor(district.id);
+    const secondSensor = await createSensor(otherDistrict.id);
+    const duplicateSensor = await createSensor(district.id);
+
+    await prisma.sensorDevice.create({
+      data: {
+        tenantId: tenant.id,
+        sensorId: firstSensor.id,
+        externalId,
+        authTokenHash: hashApiKey(`token-a-${runId}`),
+        provider: "test"
+      }
+    });
+
+    await prisma.sensorDevice.create({
+      data: {
+        tenantId: otherTenant.id,
+        sensorId: secondSensor.id,
+        externalId,
+        authTokenHash: hashApiKey(`token-b-${runId}`),
+        provider: "test"
+      }
+    });
+
+    await expect(prisma.sensorDevice.create({
+      data: {
+        tenantId: tenant.id,
+        sensorId: duplicateSensor.id,
+        externalId,
+        authTokenHash: hashApiKey(`token-c-${runId}`),
+        provider: "test"
+      }
+    })).rejects.toMatchObject({ code: "P2002" });
   });
 });
 

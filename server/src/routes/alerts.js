@@ -3,12 +3,13 @@ import { prisma } from "../config/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { emitAlertResolved } from "../services/socket.js";
 import { timeAgo } from "../utils/time.js";
+import { paginationParams } from "../utils/http.js";
 
 const router = Router();
 
 router.get("/", async (req, res, next) => {
   try {
-    const limit = Math.max(1, Math.min(100, Number(req.query.limit || 100)));
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 100 });
     const status = req.query.status || "ACTIVE";
     const where = {
       ...(req.query.districtId ? { districtId: req.query.districtId } : {}),
@@ -19,7 +20,8 @@ router.get("/", async (req, res, next) => {
       where,
       include: { district: { select: { id: true, name: true, droughtRiskLevel: true } } },
       orderBy: { triggeredAt: "desc" },
-      take: limit
+      take: limit,
+      skip: offset
     });
     res.json(alerts.map((alert) => ({
       ...alert,

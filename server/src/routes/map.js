@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../config/prisma.js";
+import { paginationParams } from "../utils/http.js";
 import { clamp } from "../utils/time.js";
 
 const router = Router();
@@ -7,6 +8,7 @@ const router = Router();
 router.get("/drought-heatmap", async (req, res, next) => {
   try {
     const districtId = req.query.districtId || null;
+    const { limit, offset } = paginationParams(req.query, { defaultLimit: 300, maxLimit: 300 });
     const rows = await prisma.$queryRaw`
       SELECT ST_Y(s.location::geometry)::float AS lat,
         ST_X(s.location::geometry)::float AS lng,
@@ -48,7 +50,8 @@ router.get("/drought-heatmap", async (req, res, next) => {
         AND (${req.tenantId || null}::uuid IS NULL OR EXISTS (
           SELECT 1 FROM "District" d WHERE d.id = s."districtId" AND d."tenantId" = ${req.tenantId || null}::uuid
         ))
-      LIMIT 300
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
 
     const points = rows.map((row) => {
