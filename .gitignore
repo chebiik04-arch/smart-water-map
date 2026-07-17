@@ -6,6 +6,7 @@ build/
 .DS_Store
 coverage/
 *.log
+secrets/
 server/prisma/dev.db
 server/uploads/
 client/test-results/

@@ -1,10 +1,21 @@
 import dotenv from "dotenv";
+import { loadSecretFiles } from "./loadSecrets.js";
 
 dotenv.config();
+loadSecretFiles();
+
+const isProduction = process.env.NODE_ENV === "production";
+const defaultJwtSecret = "development-secret-change-me";
+const requiredProductionEnv = ["DATABASE_URL", "JWT_SECRET", "CLIENT_ORIGIN"];
+const missingProductionEnv = requiredProductionEnv.filter((key) => !process.env[key]);
+if (isProduction && (missingProductionEnv.length || process.env.JWT_SECRET === defaultJwtSecret)) {
+  const missing = [...missingProductionEnv, ...(process.env.JWT_SECRET === defaultJwtSecret ? ["JWT_SECRET(non-default)"] : [])];
+  throw new Error(`Missing required production environment: ${missing.join(", ")}`);
+}
 
 export const env = {
   databaseUrl: process.env.DATABASE_URL,
-  jwtSecret: process.env.JWT_SECRET || "development-secret-change-me",
+  jwtSecret: process.env.JWT_SECRET || defaultJwtSecret,
   port: Number(process.env.PORT || 4000),
   africasTalkingApiKey: process.env.AFRICASTALKING_API_KEY || "",
   africasTalkingUsername: process.env.AFRICASTALKING_USERNAME || "sandbox",
