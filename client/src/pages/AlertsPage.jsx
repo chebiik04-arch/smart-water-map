@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Bell, CheckCircle2, Filter, Info, Smartphone } from "lucide-react";
 import { endpoints } from "../services/api";
-import { asArray } from "../utils/apiData";
+import { apiErrorMessage, asArray, asFeatureCollection } from "../utils/apiData";
 import { Pagination, usePagination } from "../components/Pagination";
+import { EmptyState, ErrorState, LoadingState } from "../components/ApiState";
 
 const filters = ["All", "High", "Medium", "Low"];
 
@@ -11,13 +12,13 @@ export function AlertsPage() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [smsEnabled, setSmsEnabled] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(true);
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["alerts-page"],
     queryFn: () => endpoints.alerts({ limit: 50, status: "ACTIVE" }).then((res) => res.data)
   });
   const { data: districts } = useQuery({ queryKey: ["alerts-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
   const rows = useMemo(() => normalizeAlerts(asArray(data)), [data]);
-  const districtName = districts?.features?.[0]?.properties?.name || "Selected area";
+  const districtName = asFeatureCollection(districts).features[0]?.properties?.name || "Selected area";
   const counts = countByPriority(rows);
   const visibleRows = activeFilter === "All" ? rows : rows.filter((alert) => alert.priority === activeFilter);
   const alertsPagination = usePagination(visibleRows, 6);
@@ -68,11 +69,9 @@ export function AlertsPage() {
 
       <div className="space-y-3">
         {alertsPagination.pageRows.map((alert) => <AlertCard key={alert.id} alert={alert} />)}
-        {!visibleRows.length && (
-          <div className="rounded-xl border border-black/10 bg-white p-8 text-center text-sm text-black/50 shadow-sm">
-            No active alerts returned by the backend.
-          </div>
-        )}
+        {isLoading && <LoadingState message="Loading active alerts." />}
+        {isError && <ErrorState message={apiErrorMessage(error, "Unable to load alerts.")} onRetry={refetch} />}
+        {!isLoading && !isError && !visibleRows.length && <EmptyState title="No active alerts" message="No active alerts were returned for this view." />}
       </div>
       {alertsPagination.total > alertsPagination.pageSize && (
         <div className="overflow-hidden rounded-xl border border-black/10 shadow-sm">

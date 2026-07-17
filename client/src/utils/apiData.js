@@ -18,3 +18,18 @@ export function featuresToProperties(collection) {
     geometry: feature.geometry
   }));
 }
+
+export function asFeatureCollection(value) {
+  if (value?.type === "FeatureCollection" && Array.isArray(value.features)) return value;
+  if (Array.isArray(value?.features)) return { type: "FeatureCollection", features: value.features };
+  if (Array.isArray(value)) return { type: "FeatureCollection", features: value };
+  return { type: "FeatureCollection", features: [] };
+}
+
+export function apiErrorMessage(error, fallback = "The API request failed.") {
+  const body = error?.response?.data;
+  if (typeof body?.error === "string") return body.error;
+  if (typeof body?.message === "string") return body.message;
+  if (typeof error?.message === "string") return error.message;
+  return fallback;
+}

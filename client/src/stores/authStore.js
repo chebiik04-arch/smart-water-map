@@ -7,16 +7,16 @@ export const useAuthStore = create(
     (set) => ({
       user: null,
       token: null,
+      refreshToken: null,
       async login(email, password) {
         const { data } = await endpoints.login({ email, password });
-        set({ user: data.user, token: data.token });
+        set({ user: data?.user || null, token: data?.accessToken || data?.token || null, refreshToken: data?.refreshToken || null });
         return data.user;
       },
       logout() {
-        set({ user: null, token: null });
+        set({ user: null, token: null, refreshToken: null });
       }
     }),
     { name: "smart-water-map-auth" }
   )
 );
-

@@ -26,8 +26,9 @@ import { WeatherWidget } from "../components/layout/WeatherWidget";
 import { endpoints } from "../services/api";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import { selectedAoiEventName, selectedAoiStorageKey } from "../hooks/useAoiSelection";
+import { asArray, asFeatureCollection } from "../utils/apiData";
 
-const links = [
+export const sidebarLinks = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
   { to: "/water-map", label: "Water Map", icon: Map },
   { to: "/water-sources", label: "Water Sources", icon: Droplet },
@@ -77,17 +78,18 @@ export function AppLayout() {
   const { data: aoiData = [] } = useQuery({ queryKey: ["aois"], queryFn: () => endpoints.aois().then((res) => res.data) });
   const { data: notificationData } = useQuery({ queryKey: ["layout-notifications"], queryFn: () => endpoints.alerts({ limit: 5, status: "ACTIVE" }).then((res) => res.data) });
   const { data: settings } = usePlatformSettings();
-  const visibleLinks = links.filter((link) => !link.admin || user?.role === "admin");
+  const visibleLinks = sidebarLinks.filter((link) => !link.admin || user?.role === "admin");
   const title = pageTitles[location.pathname] || "Dashboard";
-  const selectedDistrict = districts?.features?.find((feature) => feature.id === selectedDistrictId);
-  const aois = Array.isArray(aoiData) ? aoiData : [];
+  const districtCollection = asFeatureCollection(districts);
+  const selectedDistrict = districtCollection.features.find((feature) => feature.id === selectedDistrictId);
+  const aois = asArray(aoiData);
   const selectedAoi = aois.find((aoi) => String(aoi.id) === String(selectedAoiId));
-  const districtName = selectedAoi?.name || selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
+  const districtName = selectedAoi?.name || selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || districtCollection.features[0]?.properties?.name || user?.district || "Selected area";
   const organizationName = settings?.organizationName || "Smart Water";
   const country = settings?.country || "Kenya";
   const displayName = user?.name || user?.email || "User";
   const role = user?.role ? user.role.replace("_", " ") : "County Officer";
-  const notifications = Array.isArray(notificationData) ? notificationData : [];
+  const notifications = asArray(notificationData);
 
   useEffect(() => {
     function handleDistrictChange(event) {

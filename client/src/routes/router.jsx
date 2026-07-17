@@ -18,14 +18,17 @@ import { WaterMap } from "../pages/WaterMap";
 import { WaterSources } from "../pages/WaterSources";
 import { SettingsPage } from "../pages/SettingsPage";
 import { LocationSettingsPage } from "../pages/LocationSettingsPage";
+import { RouteErrorBoundary } from "../components/RouteErrorBoundary";
 
 export const router = createBrowserRouter([
-  { path: "/login", element: <LoginPage /> },
+  { path: "/login", element: <LoginPage />, errorElement: <RouteErrorBoundary /> },
   {
     element: <ProtectedRoute />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <AppLayout />,
+        errorElement: <RouteErrorBoundary />,
         children: [
           { index: true, element: <Navigate to="/dashboard" replace /> },
           { path: "/dashboard", element: <DashboardPage /> },
@@ -48,9 +51,11 @@ export const router = createBrowserRouter([
   },
   {
     element: <ProtectedRoute roles={["admin"]} />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <AppLayout />,
+        errorElement: <RouteErrorBoundary />,
         children: [
           { path: "/developers", element: <DeveloperPortalPage /> },
           { path: "/admin/users", element: <AdminUsersPage /> }

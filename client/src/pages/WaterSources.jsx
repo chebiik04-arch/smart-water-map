@@ -3,9 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Droplet, Pencil, Plus, Search, X } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { Pagination, usePagination } from "../components/Pagination";
+import { EmptyState, ErrorState } from "../components/ApiState";
 import { endpoints } from "../services/api";
 import { useAuthStore } from "../stores/authStore";
-import { asArray, featuresToProperties } from "../utils/apiData";
+import { apiErrorMessage, asArray, featuresToProperties } from "../utils/apiData";
 import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
 
 const selectedDistrictStorageKey = "smart-water-map-selected-district";
@@ -59,7 +60,7 @@ export function WaterSources() {
   const selectedDistrictName = selectedAoiName || selectedDistrict?.properties?.name || "Selected region";
   const selectedCenter = featureCenter(selectedDistrict);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["water-sources-page", districtId, filters.type, filters.status],
     queryFn: () => endpoints.waterSources({
       districtId,
@@ -179,6 +180,9 @@ export function WaterSources() {
           {canAdd && <button type="button" onClick={() => openCreate("BOREHOLE")} className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700"><Plus size={16} /> Add Source</button>}
         </div>
       </div>
+
+      {isError && <ErrorState message={apiErrorMessage(error, "Unable to load water sources.")} onRetry={refetch} />}
+      {!isLoading && !isError && !rows.length && <EmptyState title="No water sources" message="No water sources were returned for the selected region and filters." />}
 
       {saveStatus && (
         <div className={`rounded-md border px-4 py-3 text-sm font-medium ${saveStatus.startsWith("Unable") ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>

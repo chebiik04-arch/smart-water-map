@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, Save } from "lucide-react";
 import { endpoints } from "../services/api";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
+import { asArray } from "../utils/apiData";
 
 export function SettingsPage() {
   const [tab, setTab] = useState("general");
@@ -11,7 +12,7 @@ export function SettingsPage() {
   const { data: settings } = usePlatformSettings();
   const { data: aois = [] } = useQuery({ queryKey: ["aois"], queryFn: () => endpoints.aois().then((res) => res.data) });
   const { data: summary } = useQuery({ queryKey: ["settings-summary"], queryFn: () => endpoints.dashboardSummary().then((res) => res.data) });
-  const districtOptions = aois.map((aoi) => aoi.name).filter(Boolean);
+  const districtOptions = asArray(aois).map((aoi) => aoi.name).filter(Boolean);
   const [form, setForm] = useState({ organizationName: "", country: "", defaultDistrict: "", defaultZoom: "9", defaultBasemap: "OpenStreetMap", temperatureUnit: "Celsius" });
 
   useEffect(() => {

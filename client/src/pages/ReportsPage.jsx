@@ -4,11 +4,12 @@ import { Camera, CheckCircle, MapPin, Plus, RotateCw, X } from "lucide-react";
 import { DroughtMap } from "../components/map/DroughtMap";
 import { endpoints } from "../services/api";
 import { useAuthStore } from "../stores/authStore";
-import { asArray } from "../utils/apiData";
+import { apiErrorMessage, asArray } from "../utils/apiData";
 import { compressPhoto, getGpsPosition } from "../utils/photoEvidence";
 import { getQueuedReports, queueReport, syncQueuedReports } from "../utils/offlineReports";
 import { matchDistrictForAoi, useAoiSelection } from "../hooks/useAoiSelection";
 import { Pagination, usePagination } from "../components/Pagination";
+import { EmptyState, ErrorState, LoadingState } from "../components/ApiState";
 
 const initialForm = { districtId: "", latitude: "", longitude: "", waterLevel: "", description: "", photoUrl: "", gpsAccuracyMeters: "", photoMetadata: null };
 
@@ -22,7 +23,7 @@ export function ReportsPage() {
   const { selectedAoi, selectedAoiName, selectedAoiGeometry } = useAoiSelection();
   const canVerify = useMemo(() => ["admin", "field_agent"].includes(user?.role), [user]);
 
-  const { data: reportData, refetch: refetchReports } = useQuery({
+  const { data: reportData, isLoading: reportsLoading, isError: reportsError, error: reportsErrorData, refetch: refetchReports } = useQuery({
     queryKey: ["community-reports-page"],
     queryFn: () => endpoints.communityReports({ limit: 100 }).then((res) => res.data)
   });
@@ -140,7 +141,9 @@ export function ReportsPage() {
           <div className="border-b border-black/10 p-4"><h2 className="text-sm font-bold">Report List</h2></div>
           <div className="divide-y divide-black/10">
             {reportsPagination.pageRows.map((report) => <ReportRow key={report.id} report={report} canVerify={canVerify} onVerify={verifyReport} onReject={rejectReport} />)}
-            {!visibleReports.length && <p className="p-6 text-center text-sm text-black/50">No reports returned by the backend for this view.</p>}
+            {reportsLoading && <div className="p-4"><LoadingState message="Loading community reports." /></div>}
+            {reportsError && <div className="p-4"><ErrorState message={apiErrorMessage(reportsErrorData, "Unable to load reports.")} onRetry={refetchReports} /></div>}
+            {!reportsLoading && !reportsError && !visibleReports.length && <div className="p-4"><EmptyState title="No reports" message="No reports were returned for this view." /></div>}
           </div>
           <Pagination pagination={reportsPagination} />
         </section>

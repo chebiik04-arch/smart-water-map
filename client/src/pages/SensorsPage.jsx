@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { Download, Plus, X } from "lucide-react";
 import { Pagination, usePagination } from "../components/Pagination";
+import { ErrorState, EmptyState } from "../components/ApiState";
 import { endpoints } from "../services/api";
-import { asArray } from "../utils/apiData";
+import { apiErrorMessage, asArray } from "../utils/apiData";
 import { useAuthStore } from "../stores/authStore";
 
 const sensorTypes = ["Groundwater", "Soil Moisture", "Weather", "Rainfall"];
@@ -24,7 +25,7 @@ export function SensorsPage() {
   const [formError, setFormError] = useState("");
   const canAdd = ["admin", "field_agent"].includes(user?.role);
 
-  const { data: sensorsData, isLoading } = useQuery({
+  const { data: sensorsData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["sensors-page"],
     queryFn: () => endpoints.sensors().then((res) => res.data)
   });
@@ -137,6 +138,7 @@ export function SensorsPage() {
           <h2 className="text-sm font-bold">All Sensors</h2>
           <span className="text-xs text-black/45">{summary.total || sensors.length} devices</span>
         </div>
+        {isError && <div className="p-4"><ErrorState message={apiErrorMessage(error, "Unable to load sensors.")} onRetry={refetch} /></div>}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-[#F7FBF9] text-xs uppercase text-black/50">
@@ -166,8 +168,16 @@ export function SensorsPage() {
                   <td className="text-black/45">{relativeTime(sensor.last_updated)}</td>
                 </tr>
               ))}
-              {!sensors.length && (
-                <tr><td colSpan={9} className="p-6 text-center text-sm text-black/50">{isLoading ? "Loading sensors..." : "No sensors returned by the backend."}</td></tr>
+              {!sensors.length && !isError && (
+                <tr>
+                  <td colSpan={9} className="p-6">
+                    {isLoading ? (
+                      <div className="text-center text-sm text-black/50">Loading sensors...</div>
+                    ) : (
+                      <EmptyState title="No sensors" message="No sensors were returned for the current filters." />
+                    )}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
