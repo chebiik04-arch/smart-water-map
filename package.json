@@ -15,6 +15,7 @@
     "docker:down": "docker compose down",
     "docker:seed": "docker compose --profile seed up seed",
     "docker:logs": "docker compose logs -f server client",
+    "prod:migration-release": "sh scripts/prod-migration-release.sh",
     "lint": "npm run lint --workspace server && npm run lint --workspace client",
     "e2e": "npm run e2e --workspace client",
     "prisma:generate": "npm run prisma:generate --workspace server",

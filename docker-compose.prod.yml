@@ -16,21 +16,47 @@ services:
       timeout: 5s
       retries: 5
 
+  pgbouncer:
+    image: bitnami/pgbouncer:1.24.1
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DATABASE: ${POSTGRES_DB:-smart_water_map}
+      POSTGRESQL_USERNAME: ${POSTGRES_USER:-smart_water}
+      POSTGRESQL_PASSWORD_FILE: /run/secrets/postgres_password
+      PGBOUNCER_DATABASE: ${POSTGRES_DB:-smart_water_map}
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-500}
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-25}
+      PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-10}
+    secrets:
+      - postgres_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$$(cat /run/secrets/postgres_password) psql -h 127.0.0.1 -p 6432 -U $${POSTGRESQL_USERNAME:-smart_water} -d $${POSTGRESQL_DATABASE:-smart_water_map} -c 'SELECT 1' >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   migrate:
     image: ${SERVER_IMAGE:?SERVER_IMAGE is required}
     restart: "no"
     environment:
       NODE_ENV: production
-      DATABASE_URL_FILE: /run/secrets/database_url
+      DATABASE_URL_FILE: /run/secrets/database_direct_url
+      DIRECT_URL_FILE: /run/secrets/database_direct_url
       JWT_SECRET_FILE: /run/secrets/jwt_secret
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:?CLIENT_ORIGIN is required}
     secrets:
-      - database_url
+      - database_direct_url
       - jwt_secret
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["sh", "-c", "export DATABASE_URL=\"$$(cat /run/secrets/database_url)\" JWT_SECRET=\"$$(cat /run/secrets/jwt_secret)\" && npm run deploy:migrations"]
+    command: ["sh", "-c", "export DATABASE_URL=\"$$(cat /run/secrets/database_direct_url)\" DIRECT_URL=\"$$(cat /run/secrets/database_direct_url)\" JWT_SECRET=\"$$(cat /run/secrets/jwt_secret)\" && npm run deploy:migrations"]
 
   server:
     image: ${SERVER_IMAGE:?SERVER_IMAGE is required}
@@ -38,7 +64,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL_FILE: /run/secrets/database_url
+      DATABASE_URL_FILE: /run/secrets/database_pool_url
+      DIRECT_URL_FILE: /run/secrets/database_direct_url
       JWT_SECRET_FILE: /run/secrets/jwt_secret
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:?CLIENT_ORIGIN is required}
       AFRICASTALKING_API_KEY_FILE: /run/secrets/africastalking_api_key
@@ -71,7 +98,8 @@ services:
       IMAGE_MODERATION_API_KEY_FILE: /run/secrets/image_moderation_api_key
       OPERATIONAL_ALERT_WEBHOOK_URL_FILE: /run/secrets/operational_alert_webhook_url
     secrets:
-      - database_url
+      - database_pool_url
+      - database_direct_url
       - jwt_secret
       - africastalking_api_key
       - sensor_provider_api_key
@@ -90,6 +118,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -116,7 +146,9 @@ volumes:
 secrets:
   postgres_password:
     external: true
-  database_url:
+  database_pool_url:
+    external: true
+  database_direct_url:
     external: true
   jwt_secret:
     external: true

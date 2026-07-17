@@ -2,6 +2,7 @@ import fs from "node:fs";
 
 const secretEnvKeys = [
   "DATABASE_URL",
+  "DIRECT_URL",
   "JWT_SECRET",
   "AFRICASTALKING_API_KEY",
   "SENSOR_PROVIDER_API_KEY",
