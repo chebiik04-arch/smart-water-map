@@ -12,6 +12,7 @@ import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import { basemapAttribution, basemapOptions, basemapSwatch, basemapUrl } from "../utils/basemaps";
 
 const { Overlay } = LayersControl;
+const emptyFeatureCollection = { type: "FeatureCollection", features: [] };
 
 const sensorIcon = new L.DivIcon({
   className: "",
@@ -79,15 +80,18 @@ export function DroughtMap() {
       endpoints.hydroEvents(),
       endpoints.livestockWaterStress()
     ]).then(([districtRes, sensorRes, alertRes, reportRes, timelineRes, boreholeRes, conflictRes, hydroRes, livestockRes]) => {
-      setDistricts(districtRes.data);
+      setDistricts(asFeatureCollection(districtRes.data));
       setSensors(asArray(sensorRes.data));
       setAlerts(asArray(alertRes.data));
       setReports(asArray(reportRes.data));
       setTimeline(asArray(timelineRes.data));
       setBoreholes(asArray(boreholeRes.data));
-      setConflictRisks(conflictRes.data);
-      setHydroEvents(hydroRes.data);
-      setLivestockStress(livestockRes.data);
+      setConflictRisks(asFeatureCollection(conflictRes.data));
+      setHydroEvents(asFeatureCollection(hydroRes.data));
+      setLivestockStress({
+        waterPoints: asArray(livestockRes.data?.waterPoints),
+        pasture: asArray(livestockRes.data?.pasture)
+      });
       setWeekIndex(Math.max(0, uniqueWeeks(asArray(timelineRes.data)).length - 1));
     }).catch(() => {});
   }, []);
@@ -140,7 +144,7 @@ export function DroughtMap() {
             url={basemapUrl(basemap)}
           />
 
-          {districts && (
+          {districts?.features?.length > 0 && (
             <GeoJSON
               key={`${activeWeek}-${JSON.stringify(districts.features?.map((f) => f.properties?.droughtRiskLevel))}`}
               data={districts}
@@ -166,17 +170,17 @@ export function DroughtMap() {
 
           <Overlay checked name="Groundwater sensors">
             <>
-              {sensors.filter((s) => s.type === "GROUNDWATER").map((sensor) => <SensorMarker key={sensor.id} sensor={sensor} />)}
+              {sensors.filter((s) => (s.typeCode || s.type) === "GROUNDWATER").map((sensor) => <SensorMarker key={sensor.id} sensor={sensor} />)}
             </>
           </Overlay>
           <Overlay checked name="Soil Moisture">
             <>
-              {sensors.filter((s) => s.type === "SOIL_MOISTURE").map((sensor) => <SensorMarker key={sensor.id} sensor={sensor} />)}
+              {sensors.filter((s) => (s.typeCode || s.type) === "SOIL_MOISTURE").map((sensor) => <SensorMarker key={sensor.id} sensor={sensor} />)}
             </>
           </Overlay>
           <Overlay checked name="Rainfall">
             <>
-              {sensors.filter((s) => s.type === "RAINFALL").map((sensor) => <SensorMarker key={sensor.id} sensor={sensor} />)}
+              {sensors.filter((s) => (s.typeCode || s.type) === "RAINFALL").map((sensor) => <SensorMarker key={sensor.id} sensor={sensor} />)}
             </>
           </Overlay>
           <Overlay name="NDVI">
@@ -346,7 +350,7 @@ export function DroughtMap() {
 }
 
 function SensorMarker({ sensor }) {
-  const pos = geoJsonPointToLatLng(sensor.location);
+  const pos = geoJsonPointToLatLng(sensor.locationGeojson || sensor.location);
   if (!pos) return null;
   return (
     <Marker position={pos} icon={sensorIcon}>
@@ -407,6 +411,11 @@ function OverlayMetric({ icon: Icon, label, value }) {
 
 function uniqueWeeks(timeline) {
   return [...new Set(timeline.map((snapshot) => snapshot.weekStart))].sort();
+}
+
+function asFeatureCollection(value) {
+  if (value?.type === "FeatureCollection" && Array.isArray(value.features)) return value;
+  return emptyFeatureCollection;
 }
 
 function approximatePolygonCenter(geometry) {

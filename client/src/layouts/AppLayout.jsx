@@ -74,12 +74,13 @@ export function AppLayout() {
   const [selectedDistrictId, setSelectedDistrictId] = useState(() => localStorage.getItem(selectedDistrictStorageKey) || "");
   const [selectedAoiId, setSelectedAoiId] = useState(() => localStorage.getItem(selectedAoiStorageKey) || "");
   const { data: districts } = useQuery({ queryKey: ["layout-districts"], queryFn: () => endpoints.districts().then((res) => res.data) });
-  const { data: aois = [] } = useQuery({ queryKey: ["aois"], queryFn: () => endpoints.aois().then((res) => res.data) });
+  const { data: aoiData = [] } = useQuery({ queryKey: ["aois"], queryFn: () => endpoints.aois().then((res) => res.data) });
   const { data: notificationData } = useQuery({ queryKey: ["layout-notifications"], queryFn: () => endpoints.alerts({ limit: 5, status: "ACTIVE" }).then((res) => res.data) });
   const { data: settings } = usePlatformSettings();
   const visibleLinks = links.filter((link) => !link.admin || user?.role === "admin");
   const title = pageTitles[location.pathname] || "Dashboard";
   const selectedDistrict = districts?.features?.find((feature) => feature.id === selectedDistrictId);
+  const aois = Array.isArray(aoiData) ? aoiData : [];
   const selectedAoi = aois.find((aoi) => String(aoi.id) === String(selectedAoiId));
   const districtName = selectedAoi?.name || selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || districts?.features?.[0]?.properties?.name || user?.district || "Selected area";
   const organizationName = settings?.organizationName || "Smart Water";

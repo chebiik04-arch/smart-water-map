@@ -9,10 +9,11 @@ export const defaultAoiName = "Makueni";
 export function useAoiSelection() {
   const [selectedAoiId, setSelectedAoiId] = useState(() => localStorage.getItem(selectedAoiStorageKey) || "");
 
-  const { data: aois = [], isLoading } = useQuery({
+  const { data: aoiData = [], isLoading } = useQuery({
     queryKey: ["aois"],
     queryFn: () => endpoints.aois().then((res) => res.data)
   });
+  const aois = Array.isArray(aoiData) ? aoiData : [];
 
   useEffect(() => {
     if (!selectedAoiId && aois.length) {

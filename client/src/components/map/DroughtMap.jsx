@@ -42,14 +42,15 @@ export function DroughtMap({ districtId, aoiGeometry = null, aoiName = "", allLa
     if (settings?.map?.defaultBasemap) setBasemap(settings.map.defaultBasemap);
   }, [settings?.map?.defaultBasemap]);
 
-  const waterSources = sources?.features || [];
+  const waterSources = asArray(sources?.features);
   const sensors = asArray(sensorData);
   const reports = asArray(reportData);
   const heatPoints = asArray(heatmapData);
-  const selectedDistrict = asArray(districts?.features).find((feature) => feature.id === districtId);
+  const districtCollection = asFeatureCollection(districts);
+  const selectedDistrict = districtCollection.features.find((feature) => feature.id === districtId);
   const visibleDistricts = aoiGeometry
-    ? geometryToFeatureCollection(aoiGeometry, aoiName)
-    : selectedDistrict ? { type: "FeatureCollection", features: [selectedDistrict] } : districts;
+    ? asFeatureCollection(geometryToFeatureCollection(aoiGeometry, aoiName))
+    : selectedDistrict ? { type: "FeatureCollection", features: [selectedDistrict] } : districtCollection;
   const selectedCenter = geometryCenter(aoiGeometry) || featureCenter(selectedDistrict) || [settings?.map?.centerLat || defaultCenter[0], settings?.map?.centerLng || defaultCenter[1]];
   const selectedDistrictName = aoiName || selectedDistrict?.properties?.name || settings?.general?.defaultDistrict || "Selected area";
 
@@ -66,9 +67,9 @@ export function DroughtMap({ districtId, aoiGeometry = null, aoiName = "", allLa
         <ZoomControl position="topleft" />
         <TileLayer attribution={basemapAttribution(basemap)} url={basemapUrl(basemap)} />
         <ScaleControl position="bottomleft" metric imperial={false} />
-        {aoiGeometry && <FitToGeometry geometry={aoiGeometry} />}
-        {visibleDistricts && <GeoJSON data={visibleDistricts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
-        {layers.ndvi && visibleDistricts && <GeoJSON data={visibleDistricts} style={() => ({ color: "#22C55E", fillColor: "#BBF7D0", fillOpacity: 0.2, weight: 1 })} />}
+        {aoiGeometry && geometryCenter(aoiGeometry) && <FitToGeometry geometry={aoiGeometry} />}
+        {visibleDistricts.features.length > 0 && <GeoJSON data={visibleDistricts} style={() => ({ color: "#1B4D3E", weight: 2, fillOpacity: 0 })} onEachFeature={(feature, layer) => layer.bindTooltip(feature.properties?.name || "Unnamed district", { permanent: true, direction: "center" })} />}
+        {layers.ndvi && visibleDistricts.features.length > 0 && <GeoJSON data={visibleDistricts} style={() => ({ color: "#22C55E", fillColor: "#BBF7D0", fillOpacity: 0.2, weight: 1 })} />}
         {layers.hotspots && <HeatLayer points={heatPoints} opacity={heatOpacity} />}
         <LayerGroup>
           {waterSources.map((feature) => {
@@ -199,4 +200,10 @@ function featureCenter(feature) {
     return acc;
   }, { lat: 0, lng: 0 });
   return [totals.lat / coordinates.length, totals.lng / coordinates.length];
+}
+
+function asFeatureCollection(value) {
+  if (value?.type === "FeatureCollection" && Array.isArray(value.features)) return value;
+  if (value?.type === "Feature" && value.geometry) return { type: "FeatureCollection", features: [value] };
+  return { type: "FeatureCollection", features: [] };
 }

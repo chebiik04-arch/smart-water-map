@@ -8,11 +8,10 @@ export function SensorCard({ sensor }) {
           <p className="text-sm font-semibold">{sensor.type}</p>
           <p className="text-xs text-black/60">{sensor.districtName || sensor.district?.name}</p>
         </div>
-        <RadioTower className={sensor.status === "ONLINE" ? "text-safe" : "text-danger"} size={20} />
+        <RadioTower className={(sensor.statusCode || sensor.status) === "ONLINE" || sensor.status === "Online" ? "text-safe" : "text-danger"} size={20} />
       </div>
       <p className="mt-4 text-xs text-black/60">Last ping</p>
       <p className="text-sm">{sensor.lastPing ? new Date(sensor.lastPing).toLocaleString() : "No ping yet"}</p>
     </article>
   );
 }
-

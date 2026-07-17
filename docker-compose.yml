@@ -29,7 +29,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["npx", "prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]
+    command: ["sh", "-c", "npx prisma migrate deploy --schema prisma/schema.prisma && npm run seed:if-empty"]
     restart: "no"
 
   server:

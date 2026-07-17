@@ -2,6 +2,7 @@
   "name": "smart-water-map",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Drought monitoring platform monorepo with PostGIS, real-time sensors, and GIS dashboard.",
   "workspaces": [
     "server",

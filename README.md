@@ -120,7 +120,9 @@ This starts:
 - `server`: Express, Socket.io, JWT, cron jobs, and API routes.
 - `client`: production Vite build served by Nginx.
 
-3. Seed demo data when needed.
+3. Seed demo data manually when you need to reset demo content.
+
+The normal Docker startup seeds demo data automatically only when the database has no users.
 
 ```bash
 docker compose --profile seed up seed

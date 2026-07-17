@@ -40,9 +40,12 @@ router.post("/login", async (req, res, next) => {
       return res.status(401).json({ error: "Invalid email or password" });
     }
     if (user.status !== "ACTIVE") return res.status(403).json({ error: "User account is inactive" });
-    const updatedUser = await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    const { passwordHash, ...safeUser } = updatedUser;
-    return res.json({ user: safeUser, token: signToken(user) });
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+      select: { id: true, tenantId: true, name: true, email: true, role: true, status: true, district: true, points: true, lastLoginAt: true, createdAt: true }
+    });
+    return res.json({ user: updatedUser, token: signToken(updatedUser) });
   } catch (err) {
     return next(err);
   }
