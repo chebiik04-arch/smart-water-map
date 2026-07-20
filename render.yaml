@@ -1,0 +1,55 @@
+services:
+  - type: web
+    name: smart-water-map-api
+    runtime: docker
+    repo: https://github.com/chebiik04-arch/smart-water-map
+    branch: main
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: commit
+    healthCheckPath: /ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: UPLOAD_PROVIDER
+        value: local
+      - key: AFRICASTALKING_USERNAME
+        value: sandbox
+      - key: SENSOR_PROVIDER_MODE
+        value: generic_http
+      - key: MARKET_PRICE_PROVIDER
+        value: generic
+
+  - type: web
+    name: smart-water-map-client
+    runtime: static
+    repo: https://github.com/chebiik04-arch/smart-water-map
+    branch: main
+    buildCommand: npm ci && npm run build --workspace client
+    staticPublishPath: ./client/dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_SOCKET_URL
+        sync: false
+      - key: VITE_MAP_TILE_URL
+        value: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+      - key: VITE_DEFAULT_DISTRICT
+        value: makueni-county
+      - key: VITE_MAP_CENTER_LAT
+        value: "-1.8"
+      - key: VITE_MAP_CENTER_LNG
+        value: "37.6"
+      - key: VITE_MAP_DEFAULT_ZOOM
+        value: "9"

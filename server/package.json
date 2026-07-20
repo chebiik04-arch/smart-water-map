@@ -11,6 +11,7 @@
     "lint": "eslint src prisma --ext .js",
     "test": "vitest run",
     "test:migrations": "node scripts/checkMigrations.js",
+    "verify:supabase": "node scripts/verifySupabase.js",
     "deploy:migrations": "node scripts/deployMigrations.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
