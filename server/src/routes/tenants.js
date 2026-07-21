@@ -141,6 +141,20 @@ router.post("/:tenantId/users/:userId/deactivate", authenticate, requireRole("ad
   }
 });
 
+router.post("/:tenantId/users/:userId/activate", authenticate, requireRole("admin"), async (req, res, next) => {
+  try {
+    if (req.user.tenantId && req.user.tenantId !== req.params.tenantId) return res.status(404).json({ error: "Tenant not found" });
+    const user = await prisma.user.update({
+      where: { id: req.params.userId },
+      data: { status: "ACTIVE" },
+      select: userSelect
+    });
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
 const tenantSchema = z.object({
   name: z.string().min(2),
   slug: z.string().min(2).regex(/^[a-z0-9-]+$/),

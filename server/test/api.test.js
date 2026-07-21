@@ -304,6 +304,12 @@ describe("API hardening", () => {
       .post("/api/v1/auth/refresh")
       .send({ refreshToken: login.body.refreshToken })
       .expect(401);
+
+    const activated = await request(app)
+      .post(`/api/v1/tenants/${tenant.id}/users/${login.body.user.id}/activate`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+    expect(activated.body.status).toBe("ACTIVE");
   });
 
   it("maintains WhatsApp conversation state and creates a report", async () => {

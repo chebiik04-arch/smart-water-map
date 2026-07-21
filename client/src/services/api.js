@@ -123,6 +123,7 @@ export const endpoints = {
   createTenantUser: (id, payload) => api.post(`/tenants/${id}/users`, payload),
   updateTenantUser: (tenantId, userId, payload) => api.patch(`/tenants/${tenantId}/users/${userId}`, payload),
   deactivateTenantUser: (tenantId, userId) => api.post(`/tenants/${tenantId}/users/${userId}/deactivate`),
+  activateTenantUser: (tenantId, userId) => api.post(`/tenants/${tenantId}/users/${userId}/activate`),
   signedUploadUrl: (payload) => api.post("/uploads/signed-url", payload),
   currentSettings: () => api.get("/settings/current"),
   updateCurrentSettings: (payload) => api.patch("/settings/current", payload)
