@@ -19,6 +19,20 @@ import { WaterSources } from "../pages/WaterSources";
 import { SettingsPage } from "../pages/SettingsPage";
 import { LocationSettingsPage } from "../pages/LocationSettingsPage";
 import { RouteErrorBoundary } from "../components/RouteErrorBoundary";
+import { canAccessView } from "../utils/accessControl";
+import { useAuthStore } from "../stores/authStore";
+
+function ViewRoute({ view, children }) {
+  const { user } = useAuthStore();
+  if (!canAccessView(user?.role, view)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+}
+
+function view(view, element) {
+  return <ViewRoute view={view}>{element}</ViewRoute>;
+}
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage />, errorElement: <RouteErrorBoundary /> },
@@ -31,20 +45,20 @@ export const router = createBrowserRouter([
         errorElement: <RouteErrorBoundary />,
         children: [
           { index: true, element: <Navigate to="/dashboard" replace /> },
-          { path: "/dashboard", element: <DashboardPage /> },
-          { path: "/map", element: <MapPage /> },
-          { path: "/water-map", element: <WaterMap /> },
-          { path: "/water-sources", element: <WaterSources /> },
-          { path: "/districts/:id", element: <DistrictDetailPage /> },
-          { path: "/sensors", element: <SensorsPage /> },
-          { path: "/operations", element: <OperationsPage /> },
-          { path: "/alerts", element: <AlertsPage /> },
-          { path: "/reports", element: <ReportsPage /> },
-          { path: "/forecasts", element: <ForecastsPage /> },
-          { path: "/advisory", element: <AdvisoryPage /> },
-          { path: "/simulations", element: <SimulationsPage /> },
-          { path: "/location-settings", element: <LocationSettingsPage /> },
-          { path: "/settings", element: <SettingsPage /> }
+          { path: "/dashboard", element: view("dashboard", <DashboardPage />) },
+          { path: "/map", element: view("waterMap", <MapPage />) },
+          { path: "/water-map", element: view("waterMap", <WaterMap />) },
+          { path: "/water-sources", element: view("waterSources", <WaterSources />) },
+          { path: "/districts/:id", element: view("dashboard", <DistrictDetailPage />) },
+          { path: "/sensors", element: view("sensors", <SensorsPage />) },
+          { path: "/operations", element: view("rainfall", <OperationsPage />) },
+          { path: "/alerts", element: view("alerts", <AlertsPage />) },
+          { path: "/reports", element: view("communityReports", <ReportsPage />) },
+          { path: "/forecasts", element: view("vegetation", <ForecastsPage />) },
+          { path: "/advisory", element: view("waterSources", <AdvisoryPage />) },
+          { path: "/simulations", element: view("droughtForecast", <SimulationsPage />) },
+          { path: "/location-settings", element: view("locationSettings", <LocationSettingsPage />) },
+          { path: "/settings", element: view("settings", <SettingsPage />) }
         ]
       }
     ]
@@ -57,8 +71,8 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         errorElement: <RouteErrorBoundary />,
         children: [
-          { path: "/developers", element: <DeveloperPortalPage /> },
-          { path: "/admin/users", element: <AdminUsersPage /> }
+          { path: "/developers", element: view("reports", <DeveloperPortalPage />) },
+          { path: "/admin/users", element: view("users", <AdminUsersPage />) }
         ]
       }
     ]

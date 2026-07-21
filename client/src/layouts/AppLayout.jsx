@@ -27,21 +27,22 @@ import { endpoints } from "../services/api";
 import { usePlatformSettings } from "../hooks/usePlatformSettings";
 import { selectedAoiEventName, selectedAoiStorageKey } from "../hooks/useAoiSelection";
 import { asArray, asFeatureCollection } from "../utils/apiData";
+import { canAccessView } from "../utils/accessControl";
 
 export const sidebarLinks = [
-  { to: "/dashboard", label: "Dashboard", icon: Gauge },
-  { to: "/water-map", label: "Water Map", icon: Map },
-  { to: "/water-sources", label: "Water Sources", icon: Droplet },
-  { to: "/sensors", label: "Sensors", icon: RadioTower },
-  { to: "/operations", label: "Rainfall", icon: CloudRain },
-  { to: "/forecasts", label: "Vegetation (NDVI)", icon: Sprout },
-  { to: "/simulations", label: "Drought Forecast", icon: Binary },
-  { to: "/alerts", label: "Alerts", icon: AlertTriangle, badge: "12" },
-  { to: "/reports", label: "Community Reports", icon: Users },
-  { to: "/location-settings", label: "Location Settings", icon: MapPin },
-  { to: "/developers", label: "Reports", icon: FileText, admin: true },
-  { to: "/admin/users", label: "Users", icon: Users, admin: true },
-  { to: "/settings", label: "Settings", icon: Settings }
+  { to: "/dashboard", label: "Dashboard", icon: Gauge, view: "dashboard" },
+  { to: "/water-map", label: "Water Map", icon: Map, view: "waterMap" },
+  { to: "/water-sources", label: "Water Sources", icon: Droplet, view: "waterSources" },
+  { to: "/sensors", label: "Sensors", icon: RadioTower, view: "sensors" },
+  { to: "/operations", label: "Rainfall", icon: CloudRain, view: "rainfall" },
+  { to: "/forecasts", label: "Vegetation (NDVI)", icon: Sprout, view: "vegetation" },
+  { to: "/simulations", label: "Drought Forecast", icon: Binary, view: "droughtForecast" },
+  { to: "/alerts", label: "Alerts", icon: AlertTriangle, badge: "12", view: "alerts" },
+  { to: "/reports", label: "Community Reports", icon: Users, view: "communityReports" },
+  { to: "/location-settings", label: "Location Settings", icon: MapPin, view: "locationSettings" },
+  { to: "/developers", label: "Reports", icon: FileText, view: "reports" },
+  { to: "/admin/users", label: "Users", icon: Users, view: "users" },
+  { to: "/settings", label: "Settings", icon: Settings, view: "settings" }
 ];
 
 const pageTitles = {
@@ -78,7 +79,7 @@ export function AppLayout() {
   const { data: aoiData = [] } = useQuery({ queryKey: ["aois"], queryFn: () => endpoints.aois().then((res) => res.data) });
   const { data: notificationData } = useQuery({ queryKey: ["layout-notifications"], queryFn: () => endpoints.alerts({ limit: 5, status: "ACTIVE" }).then((res) => res.data) });
   const { data: settings } = usePlatformSettings();
-  const visibleLinks = sidebarLinks.filter((link) => !link.admin || user?.role === "admin");
+  const visibleLinks = sidebarLinks.filter((link) => canAccessView(user?.role, link.view));
   const title = pageTitles[location.pathname] || "Dashboard";
   const districtCollection = asFeatureCollection(districts);
   const selectedDistrict = districtCollection.features.find((feature) => feature.id === selectedDistrictId);
