@@ -6,7 +6,7 @@ import { useAuthStore } from "../stores/authStore";
 export function LoginPage() {
   const { login, token } = useAuthStore();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: "admin@smartwater.local", password: "AdminPass123" });
+  const [form, setForm] = useState({ email: "admin@smartwater.local", password: "AdminPass123", rememberMe: false });
   const [error, setError] = useState("");
 
   if (token) return <Navigate to="/dashboard" replace />;
@@ -15,7 +15,7 @@ export function LoginPage() {
     event.preventDefault();
     setError("");
     try {
-      await login(form.email, form.password);
+      await login(form.email, form.password, form.rememberMe);
       navigate("/dashboard");
     } catch {
       setError("Invalid credentials or API unavailable.");
@@ -40,10 +40,18 @@ export function LoginPage() {
           Password
           <input type="password" className="mt-1 w-full rounded-md border border-black/15 px-3 py-2" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         </label>
+        <label className="mb-4 flex items-center gap-2 text-sm font-medium text-black/70">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-black/20 text-primary"
+            checked={form.rememberMe}
+            onChange={(e) => setForm({ ...form, rememberMe: e.target.checked })}
+          />
+          Remember me for 7 days
+        </label>
         {error && <p className="mb-3 text-sm text-danger">{error}</p>}
         <button className="w-full rounded-md bg-primary px-4 py-2 font-semibold text-white" type="submit">Sign in</button>
       </form>
     </main>
   );
 }
-

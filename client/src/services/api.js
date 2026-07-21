@@ -1,4 +1,5 @@
 import axios from "axios";
+import { buildAuthSession, clearAuthSession, readAuthSession, writeAuthSession } from "../utils/authSession";
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1"
@@ -12,12 +13,47 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status !== 401 || originalRequest?._retry || originalRequest?.url?.includes("/auth/")) {
+      if (error.response?.status === 401) redirectToLogin();
+      return Promise.reject(error);
+    }
+
+    const session = readAuthSession();
+    if (!session.refreshToken || isExpired(session.refreshExpiresAt)) {
+      redirectToLogin();
+      return Promise.reject(error);
+    }
+
+    try {
+      originalRequest._retry = true;
+      const { data } = await axios.post(`${api.defaults.baseURL}/auth/refresh`, { refreshToken: session.refreshToken });
+      const nextSession = writeAuthSession(buildAuthSession(data, session.rememberMe));
+      originalRequest.headers = originalRequest.headers || {};
+      originalRequest.headers.Authorization = `Bearer ${nextSession.token}`;
+      return api(originalRequest);
+    } catch (refreshError) {
+      redirectToLogin();
+      return Promise.reject(refreshError);
+    }
+  }
+);
+
 function readPersistedToken() {
-  try {
-    const persisted = JSON.parse(localStorage.getItem("smart-water-map-auth") || "{}");
-    return persisted?.state?.token;
-  } catch {
-    return null;
+  return readAuthSession().token;
+}
+
+function isExpired(value) {
+  return value && Number(value) <= Date.now();
+}
+
+function redirectToLogin() {
+  clearAuthSession();
+  if (window.location.pathname !== "/login") {
+    window.location.assign("/login");
   }
 }
 

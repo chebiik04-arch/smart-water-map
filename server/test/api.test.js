@@ -74,6 +74,33 @@ describe("API hardening", () => {
     expect(login.body.refreshToken).toBeTruthy();
   });
 
+  it("issues week-long refresh tokens only when remember me is selected", async () => {
+    const email = `remember-${runId}@example.com`;
+    await request(app)
+      .post("/api/v1/auth/register")
+      .set("x-tenant-slug", tenantSlug)
+      .send({ name: "Remember User", email, password: "password123", role: "field_agent" })
+      .expect(201);
+
+    const sessionLogin = await request(app)
+      .post("/api/v1/auth/login")
+      .send({ email, password: "password123" })
+      .expect(200);
+    expect(sessionLogin.body.refreshExpiresIn).toBe(24 * 60 * 60);
+
+    const rememberedLogin = await request(app)
+      .post("/api/v1/auth/login")
+      .send({ email, password: "password123", rememberMe: true })
+      .expect(200);
+    expect(rememberedLogin.body.refreshExpiresIn).toBe(7 * 24 * 60 * 60);
+
+    const refreshed = await request(app)
+      .post("/api/v1/auth/refresh")
+      .send({ refreshToken: rememberedLogin.body.refreshToken })
+      .expect(200);
+    expect(refreshed.body.refreshExpiresIn).toBe(7 * 24 * 60 * 60);
+  });
+
   it("returns standardized 400 responses for validation errors", async () => {
     const response = await request(app)
       .post("/api/v1/auth/login")

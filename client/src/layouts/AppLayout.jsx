@@ -65,6 +65,7 @@ const pageTitles = {
 
 const selectedDistrictStorageKey = "smart-water-map-selected-district";
 const selectedDistrictEventName = "smart-water-map:district-change";
+const inactivityTimeoutMs = 10 * 60 * 1000;
 
 export function AppLayout() {
   const { user, logout } = useAuthStore();
@@ -121,6 +122,27 @@ export function AppLayout() {
   useEffect(() => {
     setNotificationsOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+
+    let timeoutId;
+    const resetTimer = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        logout();
+        navigate("/login", { replace: true });
+      }, inactivityTimeoutMs);
+    };
+    const events = ["click", "keydown", "mousemove", "scroll", "touchstart"];
+
+    resetTimer();
+    events.forEach((eventName) => window.addEventListener(eventName, resetTimer, { passive: true }));
+    return () => {
+      window.clearTimeout(timeoutId);
+      events.forEach((eventName) => window.removeEventListener(eventName, resetTimer));
+    };
+  }, [logout, navigate, user]);
 
   function toggleSidebar() {
     setSidebarCollapsed((current) => {

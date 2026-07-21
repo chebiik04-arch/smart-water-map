@@ -20,6 +20,12 @@ const registerSchema = z.object({
   district: z.string().optional()
 });
 
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+  rememberMe: z.boolean().optional().default(false)
+});
+
 router.post("/register", registrationRateLimit, async (req, res, next) => {
   try {
     const input = registerSchema.parse(req.body);
@@ -40,7 +46,7 @@ router.post("/register", registrationRateLimit, async (req, res, next) => {
 
 router.post("/login", loginRateLimit, async (req, res, next) => {
   try {
-    const { email, password } = z.object({ email: z.string().email(), password: z.string() }).parse(req.body);
+    const { email, password, rememberMe } = loginSchema.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       metrics.increment("auth_failures_total", { reason: "invalid_login" });
@@ -55,7 +61,7 @@ router.post("/login", loginRateLimit, async (req, res, next) => {
       data: { lastLoginAt: new Date() },
       select: userSelect
     });
-    return res.json({ user: updatedUser, ...(await issueTokenPair(updatedUser)) });
+    return res.json({ user: updatedUser, ...(await issueTokenPair(updatedUser, { rememberMe })) });
   } catch (err) {
     return next(err);
   }
@@ -80,7 +86,7 @@ router.post("/refresh", async (req, res, next) => {
     }
 
     await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
-    return res.json({ user: stored.user, ...(await issueTokenPair(stored.user)) });
+    return res.json({ user: stored.user, ...(await issueTokenPair(stored.user, { rememberMe: stored.rememberMe })) });
   } catch (err) {
     return next(err);
   }
@@ -102,7 +108,8 @@ router.post("/logout", async (req, res, next) => {
 });
 
 const accessTokenTtl = "15m";
-const refreshTokenTtlMs = 30 * 24 * 60 * 60 * 1000;
+const sessionRefreshTokenTtlMs = 24 * 60 * 60 * 1000;
+const rememberedRefreshTokenTtlMs = 7 * 24 * 60 * 60 * 1000;
 
 const userSelect = {
   id: true,
@@ -129,13 +136,15 @@ function signToken(user) {
   }, env.jwtSecret, { expiresIn: accessTokenTtl });
 }
 
-async function issueTokenPair(user) {
+async function issueTokenPair(user, { rememberMe = false } = {}) {
+  const refreshTokenTtlMs = rememberMe ? rememberedRefreshTokenTtlMs : sessionRefreshTokenTtlMs;
   const refreshToken = crypto.randomBytes(48).toString("base64url");
   await prisma.refreshToken.create({
     data: {
       userId: user.id,
       tokenHash: hashApiKey(refreshToken),
-      expiresAt: new Date(Date.now() + refreshTokenTtlMs)
+      expiresAt: new Date(Date.now() + refreshTokenTtlMs),
+      rememberMe
     }
   });
   return {

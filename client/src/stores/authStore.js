@@ -1,22 +1,27 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { endpoints } from "../services/api";
+import { api, endpoints } from "../services/api";
+import { authSessionUpdatedEvent, buildAuthSession, clearAuthSession, readAuthSession, writeAuthSession } from "../utils/authSession";
 
-export const useAuthStore = create(
-  persist(
-    (set) => ({
-      user: null,
-      token: null,
-      refreshToken: null,
-      async login(email, password) {
-        const { data } = await endpoints.login({ email, password });
-        set({ user: data?.user || null, token: data?.accessToken || data?.token || null, refreshToken: data?.refreshToken || null });
-        return data.user;
-      },
-      logout() {
-        set({ user: null, token: null, refreshToken: null });
-      }
-    }),
-    { name: "smart-water-map-auth" }
-  )
-);
+const initialSession = readAuthSession();
+
+export const useAuthStore = create((set, get) => ({
+  ...initialSession,
+  async login(email, password, rememberMe = false) {
+    const { data } = await endpoints.login({ email, password, rememberMe });
+    const session = writeAuthSession(buildAuthSession(data, rememberMe));
+    set(session);
+    return data.user;
+  },
+  async logout({ revoke = true } = {}) {
+    const refreshToken = get().refreshToken;
+    clearAuthSession();
+    set(readAuthSession());
+    if (revoke && refreshToken) {
+      await api.post("/auth/logout", { refreshToken }).catch(() => {});
+    }
+  }
+}));
+
+window.addEventListener(authSessionUpdatedEvent, (event) => {
+  useAuthStore.setState(event.detail || readAuthSession());
+});

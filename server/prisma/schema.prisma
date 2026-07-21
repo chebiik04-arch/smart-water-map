@@ -232,6 +232,7 @@ model RefreshToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String    @unique
   expiresAt DateTime
+  rememberMe Boolean  @default(false)
   revokedAt DateTime?
   createdAt DateTime  @default(now())
 
