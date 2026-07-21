@@ -11,10 +11,9 @@ export const VIEW_ACCESS = {
   reports: ["admin"],
   users: ["admin"],
   locationSettings: ["admin"],
-  settings: ["admin"]
+  settings: ["admin", "field_agent", "community_user"]
 };
 
 export function canAccessView(role, view) {
   return VIEW_ACCESS[view]?.includes(role) || false;
 }
-
